@@ -138,6 +138,7 @@
         <div id="mode-panel">
             <div class="mode-row"><span class="mode-key">検出モード</span><span id="mode-detector" class="mode-value">初期化中</span></div>
             <div class="mode-row"><span class="mode-key">実行プロバイダ</span><span id="mode-provider" class="mode-value">未確定</span></div>
+            <div class="mode-row"><span class="mode-key">SCRFD稼働</span><span id="mode-scrfd" class="mode-value">未初期化</span></div>
             <div class="mode-row"><span class="mode-key">出力形式</span><span id="mode-output" class="mode-value">未確定</span></div>
         </div>
 
@@ -177,6 +178,7 @@
         const exportHint = document.getElementById('export-hint');
         const modeDetector = document.getElementById('mode-detector');
         const modeProvider = document.getElementById('mode-provider');
+        const modeScrfd = document.getElementById('mode-scrfd');
         const modeOutput = document.getElementById('mode-output');
         const DISPLAY_SCORE_THRESHOLD = 0.15;
         const SCRFD_MODEL_URL = './models/det_500m.onnx';
@@ -213,6 +215,10 @@
         let sourceVideoFileHandle = null;
         let activeDetectorModeLabel = '初期化中';
         let activeProviderLabel = '未確定';
+        let scrfdSessionReady = false;
+        let scrfdLastDetections = 0;
+        let scrfdNoDetectionStreak = 0;
+        let scrfdLastError = '';
 
         function pickWebmMimeType() {
             const candidates = [
@@ -235,6 +241,13 @@
         function updateModePanel() {
             modeDetector.innerText = activeDetectorModeLabel;
             modeProvider.innerText = activeProviderLabel;
+            if (activeDetectorModeLabel.includes('SCRFD')) {
+                const status = scrfdSessionReady ? '稼働中' : '未接続';
+                const errText = scrfdLastError ? ` / err:${scrfdLastError}` : '';
+                modeScrfd.innerText = `${status} / det:${scrfdLastDetections} / zero:${scrfdNoDetectionStreak}${errText}`;
+            } else {
+                modeScrfd.innerText = 'N/A';
+            }
             const outputExt = sourceVideoExtension || processedOutputExtension || '.webm';
             const outputMime = toPickerMimeType(processedOutputMimeType || 'video/webm');
             modeOutput.innerText = `${outputExt} (${outputMime})`;
@@ -891,10 +904,15 @@
                             this.session = await ort.InferenceSession.create(modelBuffer, {
                                 executionProviders,
                             });
+                            scrfdSessionReady = true;
+                            scrfdLastError = '';
+                            updateModePanel();
                             addLog('SCRFD セッション初期化完了。');
                             return;
                         } catch (error) {
                             lastError = error;
+                            scrfdLastError = error.message;
+                            updateModePanel();
                             addLog(`SCRFD ロード失敗 (${attempt}/3): ${error.message}`);
                         }
                     }
@@ -1100,6 +1118,9 @@
                 return;
             }
             sourceVideoExtension = getOutputExtension(file.name);
+            scrfdLastDetections = 0;
+            scrfdNoDetectionStreak = 0;
+            scrfdLastError = '';
             updateModePanel();
 
             sourceVideoFileHandle = null;
@@ -1158,6 +1179,18 @@
                 detections = await detector.detect(video);
             } catch (error) {
                 addLog(`顔検出エラー: ${error.message}`);
+                if (detector instanceof ScrfdDetector) {
+                    scrfdLastError = error.message;
+                }
+            }
+            if (detector instanceof ScrfdDetector) {
+                const detCount = Array.isArray(detections) ? detections.length : 0;
+                scrfdLastDetections = detCount;
+                scrfdNoDetectionStreak = detCount > 0 ? 0 : (scrfdNoDetectionStreak + 1);
+                if (scrfdNoDetectionStreak > 0 && scrfdNoDetectionStreak % 60 === 0) {
+                    addLog(`SCRFD診断: ${scrfdNoDetectionStreak}フレーム連続で未検出です。`);
+                }
+                updateModePanel();
             }
             const latencyMs = performance.now() - startedAt;
             const drawnCount = renderDetections(detections || []);
