@@ -219,6 +219,8 @@
         let scrfdLastDetections = 0;
         let scrfdNoDetectionStreak = 0;
         let scrfdLastError = '';
+        let frameSnapshotCanvas = null;
+        let frameSnapshotCtx = null;
 
         function pickWebmMimeType() {
             const candidates = [
@@ -1159,6 +1161,10 @@
             video.onloadeddata = async () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
+                frameSnapshotCanvas = document.createElement('canvas');
+                frameSnapshotCanvas.width = canvas.width;
+                frameSnapshotCanvas.height = canvas.height;
+                frameSnapshotCtx = frameSnapshotCanvas.getContext('2d', { willReadFrequently: true });
                 addLog(`解像度設定: ${canvas.width}x${canvas.height}`);
                 const durationSec = getFiniteDurationSeconds(video);
                 evaluation.estimatedTotalFrames = durationSec > 0
@@ -1181,11 +1187,18 @@
         async function processVideoFrame() {
             if (!isProcessing || video.paused || video.ended) return;
 
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            if (!frameSnapshotCanvas || !frameSnapshotCtx) {
+                frameSnapshotCanvas = document.createElement('canvas');
+                frameSnapshotCanvas.width = canvas.width;
+                frameSnapshotCanvas.height = canvas.height;
+                frameSnapshotCtx = frameSnapshotCanvas.getContext('2d', { willReadFrequently: true });
+            }
+
+            frameSnapshotCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const startedAt = performance.now();
             let detections = [];
             try {
-                detections = await detector.detect(video);
+                detections = await detector.detect(frameSnapshotCanvas);
             } catch (error) {
                 addLog(`顔検出エラー: ${error.message}`);
                 if (detector instanceof ScrfdDetector) {
@@ -1202,6 +1215,7 @@
                 updateModePanel();
             }
             const latencyMs = performance.now() - startedAt;
+            ctx.drawImage(frameSnapshotCanvas, 0, 0, canvas.width, canvas.height);
             const drawnCount = renderDetections(detections || []);
             recordEvaluationFrame(drawnCount, latencyMs);
 
