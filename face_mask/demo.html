@@ -90,6 +90,31 @@
         #status-text {
             position: relative; z-index: 1;
         }
+        #mode-panel {
+            margin-top: 10px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 0.78rem;
+            color: #cfcfcf;
+            line-height: 1.45;
+        }
+        .mode-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .mode-key {
+            color: #9fb7d8;
+            white-space: nowrap;
+        }
+        .mode-value {
+            color: #fff;
+            text-align: right;
+            word-break: break-word;
+        }
 
         /* 非表示のVideo要素 */
         video { display: none; }
@@ -108,6 +133,12 @@
         <div style="display: grid; gap: 8px; margin-bottom: 16px;">
             <button id="download-processed-btn" disabled style="height: 36px; border: 0; border-radius: 8px; background: #2f934b; color: #fff; font-weight: 700; cursor: pointer;">処理後動画を保存</button>
             <span id="export-hint" style="font-size: 0.78rem; color: #999;">動画処理完了後に保存できます。</span>
+        </div>
+
+        <div id="mode-panel">
+            <div class="mode-row"><span class="mode-key">検出モード</span><span id="mode-detector" class="mode-value">初期化中</span></div>
+            <div class="mode-row"><span class="mode-key">実行プロバイダ</span><span id="mode-provider" class="mode-value">未確定</span></div>
+            <div class="mode-row"><span class="mode-key">出力形式</span><span id="mode-output" class="mode-value">未確定</span></div>
         </div>
 
         <div style="margin-top: auto; font-size: 0.85rem; color: #888;">
@@ -144,6 +175,9 @@
         const progressBar = document.getElementById('progress-bar');
         const downloadProcessedBtn = document.getElementById('download-processed-btn');
         const exportHint = document.getElementById('export-hint');
+        const modeDetector = document.getElementById('mode-detector');
+        const modeProvider = document.getElementById('mode-provider');
+        const modeOutput = document.getElementById('mode-output');
         const DISPLAY_SCORE_THRESHOLD = 0.15;
         const SCRFD_MODEL_URL = './models/det_500m.onnx';
         const DRAW_BBOX_OUTLINE = false;
@@ -177,6 +211,8 @@
         let processedOutputBlob = null;
         let inputVideoUrl = null;
         let sourceVideoFileHandle = null;
+        let activeDetectorModeLabel = '初期化中';
+        let activeProviderLabel = '未確定';
 
         function pickWebmMimeType() {
             const candidates = [
@@ -188,6 +224,20 @@
                 if (window.MediaRecorder && MediaRecorder.isTypeSupported(mime)) return mime;
             }
             return '';
+        }
+
+        function getDetectorModeLabel(mode) {
+            if (mode === 'candidate_scrfd' || mode === 'candidate_scrfd_500m') return 'SCRFD';
+            if (mode === 'baseline_mediapipe') return 'MediaPipe';
+            return mode || '不明';
+        }
+
+        function updateModePanel() {
+            modeDetector.innerText = activeDetectorModeLabel;
+            modeProvider.innerText = activeProviderLabel;
+            const outputExt = sourceVideoExtension || processedOutputExtension || '.webm';
+            const outputMime = toPickerMimeType(processedOutputMimeType || 'video/webm');
+            modeOutput.innerText = `${outputExt} (${outputMime})`;
         }
 
         function resetExportState() {
@@ -206,6 +256,7 @@
             downloadProcessedBtn.disabled = true;
             downloadProcessedBtn.textContent = '処理後動画を保存';
             exportHint.textContent = '動画処理完了後に保存できます。';
+            updateModePanel();
         }
 
         function getBaseOutputName() {
@@ -248,9 +299,15 @@
             return Math.min(MAX_VIDEO_BITRATE, Math.max(MIN_VIDEO_BITRATE, estimated));
         }
 
+        function getPreferredExecutionProviders() {
+            const hasWebGpu = typeof navigator !== 'undefined' && !!navigator.gpu;
+            return hasWebGpu ? ['webgpu', 'wasm'] : ['wasm'];
+        }
+
         async function createProcessedOutputTarget(fileName, mimeType) {
             processedOutputMimeType = mimeType;
             processedOutputBytes = 0;
+            updateModePanel();
 
             if (navigator.storage && typeof navigator.storage.getDirectory === 'function') {
                 const root = await navigator.storage.getDirectory();
@@ -417,6 +474,16 @@
             entry.innerText = `> ${message}`;
             logPanel.appendChild(entry);
             logPanel.scrollTop = logPanel.scrollHeight;
+        }
+
+        function logRuntimeCompatibility() {
+            const hasGpu = typeof navigator !== 'undefined' && !!navigator.gpu;
+            const hasMediaRecorder = !!window.MediaRecorder;
+            const hasCanvasCapture = !!canvas.captureStream;
+            const hasVideoCapture = !!video.captureStream;
+            const hasSavePicker = !!window.showSaveFilePicker;
+            addLog(`環境: ${navigator.platform || 'unknown'} / ${navigator.userAgent}`);
+            addLog(`互換性: WebGPU=${hasGpu ? 'OK' : 'NG(wasmで動作)'} / MediaRecorder=${hasMediaRecorder ? 'OK' : 'NG'} / CanvasCapture=${hasCanvasCapture ? 'OK' : 'NG'} / VideoCapture=${hasVideoCapture ? 'OK' : 'NG'} / SavePicker=${hasSavePicker ? 'OK' : 'NG'}`);
         }
 
         function getFiniteDurationSeconds(media) {
@@ -782,6 +849,16 @@
             async init() {
                 if (!window.ort) throw new Error('onnxruntime-web のロードに失敗しました。');
 
+                if (window.ort?.env?.wasm) {
+                    // Keep CPU fallback as fast as possible on non-GPU machines.
+                    window.ort.env.wasm.simd = true;
+                    if (window.crossOriginIsolated) {
+                        window.ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+                    } else {
+                        window.ort.env.wasm.numThreads = 1;
+                    }
+                }
+
                 if (window.location.protocol === 'file:') {
                     throw new Error(
                         'file:// で開くとSCRFDモデルを取得できません。' +
@@ -797,6 +874,10 @@
                 ]));
 
                 let lastError = null;
+                const executionProviders = getPreferredExecutionProviders();
+                activeProviderLabel = executionProviders.join(' -> ');
+                updateModePanel();
+                addLog(`SCRFD 実行プロバイダ: ${executionProviders.join(' -> ')}`);
                 for (const modelUrl of modelCandidates) {
                     addLog(`SCRFD モデルをロード中: ${modelUrl}`);
                     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -808,7 +889,7 @@
 
                             const modelBuffer = await response.arrayBuffer();
                             this.session = await ort.InferenceSession.create(modelBuffer, {
-                                executionProviders: ['webgpu', 'wasm'],
+                                executionProviders,
                             });
                             addLog('SCRFD セッション初期化完了。');
                             return;
@@ -976,17 +1057,25 @@
         }
 
         async function initializeDetector() {
+            logRuntimeCompatibility();
+            activeDetectorModeLabel = getDetectorModeLabel(DETECTOR_MODE);
+            activeProviderLabel = '初期化中';
+            updateModePanel();
             try {
                 detector = await createDetectorByMode(DETECTOR_MODE);
                 await detector.init();
+                activeDetectorModeLabel = getDetectorModeLabel(DETECTOR_MODE);
                 addLog(`検出器モード: ${DETECTOR_MODE}`);
             } catch (error) {
                 addLog(`警告: ${DETECTOR_MODE} の初期化に失敗 (${error.message})`);
                 addLog('baseline_mediapipe にフォールバックします。');
                 detector = new MediaPipeDetector();
                 await detector.init();
+                activeDetectorModeLabel = 'MediaPipe (fallback)';
+                activeProviderLabel = 'browser runtime';
             }
 
+            updateModePanel();
             addLog('準備完了！動画をドロップしてください。');
             statusText.innerText = 'READY';
             statusBar.style.backgroundColor = '#28a745';
@@ -1011,6 +1100,7 @@
                 return;
             }
             sourceVideoExtension = getOutputExtension(file.name);
+            updateModePanel();
 
             sourceVideoFileHandle = null;
             const firstItem = e.dataTransfer.items && e.dataTransfer.items[0];
@@ -1063,9 +1153,14 @@
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const startedAt = performance.now();
-            const detections = await detector.detect(video);
+            let detections = [];
+            try {
+                detections = await detector.detect(video);
+            } catch (error) {
+                addLog(`顔検出エラー: ${error.message}`);
+            }
             const latencyMs = performance.now() - startedAt;
-            const drawnCount = renderDetections(detections);
+            const drawnCount = renderDetections(detections || []);
             recordEvaluationFrame(drawnCount, latencyMs);
 
             requestAnimationFrame(processVideoFrame);
@@ -1090,9 +1185,6 @@
             if (inputVideoUrl) {
                 URL.revokeObjectURL(inputVideoUrl);
                 inputVideoUrl = null;
-            }
-            if (detector && typeof detector.dispose === 'function') {
-                await detector.dispose();
             }
         };
     </script>
