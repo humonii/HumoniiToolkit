@@ -682,12 +682,18 @@
             facePatch.height = ih;
             const patchCtx = facePatch.getContext('2d');
 
+            const tinyPatch = document.createElement('canvas');
+            tinyPatch.width = smallW;
+            tinyPatch.height = smallH;
+            const tinyCtx = tinyPatch.getContext('2d');
+
             const prevSmoothing = ctx.imageSmoothingEnabled;
-            // Keep smoothing on for a softer, blur-like mosaic.
-            ctx.imageSmoothingEnabled = true;
-            patchCtx.imageSmoothingEnabled = true;
-            patchCtx.drawImage(srcPatch, 0, 0, iw, ih, 0, 0, smallW, smallH);
-            patchCtx.drawImage(facePatch, 0, 0, smallW, smallH, 0, 0, iw, ih);
+            // Use nearest-neighbor upscaling so the mosaic is clearly visible.
+            tinyCtx.imageSmoothingEnabled = false;
+            patchCtx.imageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = false;
+            tinyCtx.drawImage(srcPatch, 0, 0, iw, ih, 0, 0, smallW, smallH);
+            patchCtx.drawImage(tinyPatch, 0, 0, smallW, smallH, 0, 0, iw, ih);
             ctx.imageSmoothingEnabled = prevSmoothing;
 
             // Add a light gaussian-like blur pass so the effect is visible even on small boxes.
@@ -737,7 +743,10 @@
             blurredCtx.globalCompositeOperation = 'destination-in';
             blurredCtx.drawImage(mask, 0, 0);
 
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
             ctx.drawImage(blurred, ix, iy, iw, ih);
+            ctx.restore();
         }
 
         function renderDetections(detections) {
