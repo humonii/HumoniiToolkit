@@ -140,8 +140,13 @@
         let evaluation = null;
         let detector = null;
         let mediaRecorder = null;
-        let recordedChunks = [];
-        let processedVideoBlob = null;
+        let processedOutputHandle = null;
+        let processedOutputWriter = null;
+        let processedOutputWriteChain = Promise.resolve();
+        let processedOutputBytes = 0;
+        let processedOutputMimeType = '';
+        let processedOutputBlob = null;
+        let inputVideoUrl = null;
 
         function pickWebmMimeType() {
             const candidates = [
@@ -156,15 +161,90 @@
         }
 
         function resetExportState() {
-            if (processedVideoBlob) {
-                processedVideoBlob = null;
+            if (processedOutputWriter) {
+                try {
+                    processedOutputWriter.close();
+                } catch (_) {}
             }
-            recordedChunks = [];
+            processedOutputHandle = null;
+            processedOutputWriter = null;
+            processedOutputWriteChain = Promise.resolve();
+            processedOutputBytes = 0;
+            processedOutputMimeType = '';
+            processedOutputBlob = null;
             downloadProcessedBtn.disabled = true;
             exportHint.textContent = '動画処理完了後に保存できます。';
         }
 
-        function setupProcessedRecorder() {
+        function getBaseOutputName() {
+            const baseName = evaluation?.fileName ? evaluation.fileName.replace(/\.[^/.]+$/, '') : 'mosaicked';
+            return `${baseName}_mosaicked.webm`;
+        }
+
+        async function createProcessedOutputTarget(fileName, mimeType) {
+            processedOutputMimeType = mimeType;
+            processedOutputBytes = 0;
+
+            if (navigator.storage && typeof navigator.storage.getDirectory === 'function') {
+                const root = await navigator.storage.getDirectory();
+                processedOutputHandle = await root.getFileHandle(fileName, { create: true });
+                processedOutputWriter = await processedOutputHandle.createWritable({ keepExistingData: false });
+                addLog('出力先に OPFS を使用します。');
+                return;
+            }
+
+            processedOutputHandle = null;
+            processedOutputWriter = null;
+            addLog('OPFS が使えないため、メモリ退避モードで出力します。');
+        }
+
+        function enqueueProcessedChunk(chunk) {
+            if (!chunk || chunk.size === 0) return;
+
+            if (processedOutputWriter) {
+                processedOutputBytes += chunk.size;
+                processedOutputWriteChain = processedOutputWriteChain
+                    .then(() => processedOutputWriter.write(chunk))
+                    .then(() => {
+                        exportHint.textContent = `保存中... ${(processedOutputBytes / (1024 * 1024)).toFixed(1)} MB`;
+                    })
+                    .catch((error) => {
+                        addLog(`出力書き込みエラー: ${error.message}`);
+                    });
+                return;
+            }
+
+            if (!processedOutputBlob) {
+                processedOutputBlob = new Blob([chunk], { type: processedOutputMimeType });
+            } else {
+                processedOutputBlob = new Blob([processedOutputBlob, chunk], { type: processedOutputMimeType });
+            }
+            processedOutputBytes += chunk.size;
+            exportHint.textContent = `メモリ保持中... ${(processedOutputBytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        async function finalizeProcessedOutput() {
+            if (processedOutputWriter) {
+                await processedOutputWriteChain;
+                await processedOutputWriter.close();
+                processedOutputWriter = null;
+                downloadProcessedBtn.disabled = false;
+                exportHint.textContent = `保存準備OK (${(processedOutputBytes / (1024 * 1024)).toFixed(1)} MB)`;
+                addLog('処理後動画の保存準備ができました。');
+                return;
+            }
+
+            if (processedOutputBlob) {
+                downloadProcessedBtn.disabled = false;
+                exportHint.textContent = `保存準備OK (${(processedOutputBlob.size / (1024 * 1024)).toFixed(1)} MB)`;
+                addLog('処理後動画の保存準備ができました。');
+                return;
+            }
+
+            addLog('出力データが空でした。');
+        }
+
+        async function setupProcessedOutput(fileName) {
             if (!window.MediaRecorder || !canvas.captureStream) {
                 addLog('このブラウザは動画出力に必要なAPIに対応していません。');
                 exportHint.textContent = 'このブラウザでは出力できません。';
@@ -186,33 +266,40 @@
                 ...(audioTracks.length ? [audioTracks[0]] : []),
             ]);
 
-            recordedChunks = [];
+            const outputName = fileName || getBaseOutputName();
+            await createProcessedOutputTarget(outputName, mimeType);
+
             mediaRecorder = new MediaRecorder(mixedStream, { mimeType });
             mediaRecorder.ondataavailable = (event) => {
-                if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+                if (event.data && event.data.size > 0) enqueueProcessedChunk(event.data);
             };
-            mediaRecorder.onstop = () => {
-                if (!recordedChunks.length) {
-                    addLog('出力データが空でした。');
-                    return;
+            mediaRecorder.onstop = async () => {
+                try {
+                    await finalizeProcessedOutput();
+                } catch (error) {
+                    addLog(`保存処理に失敗しました: ${error.message}`);
+                    exportHint.textContent = '保存処理に失敗しました。';
                 }
-                processedVideoBlob = new Blob(recordedChunks, { type: mimeType });
-                downloadProcessedBtn.disabled = false;
-                exportHint.textContent = `保存準備OK (${(processedVideoBlob.size / (1024 * 1024)).toFixed(1)} MB)`;
-                addLog('処理後動画の保存準備ができました。');
             };
 
-            mediaRecorder.start(200);
-            addLog('処理後動画の録画を開始しました。');
+            mediaRecorder.start(1000);
+            addLog('モザイク済み動画の書き出しを開始しました。');
         }
 
-        downloadProcessedBtn.addEventListener('click', () => {
-            if (!processedVideoBlob) return;
-            const url = URL.createObjectURL(processedVideoBlob);
+        downloadProcessedBtn.addEventListener('click', async () => {
+            let blob = null;
+            if (processedOutputHandle) {
+                blob = await processedOutputHandle.getFile();
+            } else if (processedOutputBlob) {
+                blob = processedOutputBlob;
+            }
+
+            if (!blob) return;
+
+            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            const baseName = evaluation?.fileName ? evaluation.fileName.replace(/\.[^/.]+$/, '') : 'mosaicked';
-            a.download = `${baseName}_mosaicked.webm`;
+            a.download = getBaseOutputName();
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -799,15 +886,15 @@
             startEvaluation(file.name);
             resetExportState();
 
-            const url = URL.createObjectURL(file);
-            video.src = url;
+            inputVideoUrl = URL.createObjectURL(file);
+            video.src = inputVideoUrl;
 
-            video.onloadeddata = () => {
+            video.onloadeddata = async () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 addLog(`解像度設定: ${canvas.width}x${canvas.height}`);
 
-                setupProcessedRecorder();
+                await setupProcessedOutput(file.name);
 
                 video.play();
                 isProcessing = true;
@@ -841,6 +928,10 @@
             }
             statusBar.innerText = 'READY';
             statusBar.style.backgroundColor = '#28a745';
+            if (inputVideoUrl) {
+                URL.revokeObjectURL(inputVideoUrl);
+                inputVideoUrl = null;
+            }
             if (detector && typeof detector.dispose === 'function') {
                 await detector.dispose();
             }

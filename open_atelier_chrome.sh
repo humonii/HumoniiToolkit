@@ -8,6 +8,12 @@ URL="http://localhost:${PORT}/index.html"
 if ! curl -fsS "${URL}" >/dev/null 2>&1; then
   echo "Starting Tool Atelier server on port ${PORT}..."
   nohup python3 -m http.server "${PORT}" --directory "${BASE_DIR}" >/tmp/tool_atelier_http.log 2>&1 &
+  for _ in $(seq 1 50); do
+    if curl -fsS "${URL}" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.2
+  done
 fi
 
 if command -v google-chrome >/dev/null 2>&1; then
