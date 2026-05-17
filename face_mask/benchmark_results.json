@@ -1,0 +1,34 @@
+{
+  "input_video": "/home/hmpc2024a/ytlab_ros_ws/tools/face_mask/demo.mp4",
+  "score_threshold": 0.45,
+  "results": [
+    {
+      "detector": "candidate_scrfd_10g",
+      "total_frames": 429,
+      "detected_frames": 429,
+      "detection_frame_rate": 1.0,
+      "miss_rate": 0.0,
+      "max_consecutive_misses": 0,
+      "avg_latency_ms": 23.49,
+      "p95_latency_ms": 24.45,
+      "effective_fps": 42.56
+    },
+    {
+      "detector": "candidate_scrfd_500m",
+      "total_frames": 429,
+      "detected_frames": 429,
+      "detection_frame_rate": 1.0,
+      "miss_rate": 0.0,
+      "max_consecutive_misses": 0,
+      "avg_latency_ms": 4.53,
+      "p95_latency_ms": 4.7,
+      "effective_fps": 220.86
+    }
+  ],
+  "failed": [
+    {
+      "detector": "baseline_mediapipe",
+      "error": "Traceback (most recent call last):\n  File \"/home/hmpc2024a/ytlab_ros_ws/tools/face_mask/benchmark.py\", line 48, in init\n    from mediapipe.python.solutions.face_detection import FaceDetection\nModuleNotFoundError: No module named 'mediapipe.python'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/home/hmpc2024a/ytlab_ros_ws/tools/face_mask/benchmark.py\", line 235, in main\n    det.init()\n  File \"/home/hmpc2024a/ytlab_ros_ws/tools/face_mask/benchmark.py\", line 51, in init\n    FaceDetection = mp.solutions.face_detection.FaceDetection\nAttributeError: module 'mediapipe' has no attribute 'solutions'\n"
+    }
+  ]
+}

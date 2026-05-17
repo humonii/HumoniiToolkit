@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Humonii Toolkit | Vectorizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/tool-page.css" />
+  <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.min.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="../index.html">← Humonii Toolkit</a>
+  </div>
+
+  <main class="container">
+    <section class="hero">
+      <span class="badge">Vector Tool</span>
+      <h1>Image Vectorizer</h1>
+      <p>画像をベクター化し、SVGとして書き出します。ロゴ素材の下準備に使えます。</p>
+    </section>
+
+    <section class="grid">
+      <aside class="panel">
+        <h2>Controls</h2>
+        <label for="file">画像ファイル</label>
+        <input id="file" type="file" accept="image/*" />
+
+        <label for="colors">色数: <span id="colors-val">12</span></label>
+        <input id="colors" type="range" min="4" max="32" step="1" value="12" />
+
+        <label for="blur">パス単純化（ltres）: <span id="blur-val">1.0</span></label>
+        <input id="blur" type="range" min="0.1" max="2.5" step="0.1" value="1.0" />
+
+        <div style="margin-top:12px; display:grid; gap:8px;">
+          <button id="run">Vectorize</button>
+          <button id="download" class="alt" disabled>Download SVG</button>
+        </div>
+
+        <p class="hint" id="status">画像を選択してください。</p>
+      </aside>
+
+      <section class="panel">
+        <h2>Preview</h2>
+        <div id="preview" class="preview"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById('file');
+    const colorsInput = document.getElementById('colors');
+    const blurInput = document.getElementById('blur');
+    const colorsVal = document.getElementById('colors-val');
+    const blurVal = document.getElementById('blur-val');
+    const runBtn = document.getElementById('run');
+    const dlBtn = document.getElementById('download');
+    const statusEl = document.getElementById('status');
+    const preview = document.getElementById('preview');
+
+    let imageUrl = '';
+    let svgText = '';
+
+    colorsInput.addEventListener('input', () => {
+      colorsVal.textContent = colorsInput.value;
+    });
+
+    blurInput.addEventListener('input', () => {
+      blurVal.textContent = blurInput.value;
+    });
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      imageUrl = URL.createObjectURL(file);
+
+      const img = new Image();
+      img.src = imageUrl;
+      img.onload = () => {
+        preview.innerHTML = '';
+        preview.appendChild(img);
+        statusEl.textContent = '画像を読み込みました。Vectorize を押してください。';
+      };
+    });
+
+    runBtn.addEventListener('click', () => {
+      if (!imageUrl) {
+        statusEl.textContent = '先に画像を選択してください。';
+        return;
+      }
+
+      statusEl.textContent = 'ベクター化中...';
+      runBtn.disabled = true;
+      dlBtn.disabled = true;
+
+      const options = {
+        numberofcolors: Number(colorsInput.value),
+        ltres: Number(blurInput.value),
+        qtres: 1.0,
+        pathomit: 8,
+      };
+
+      window.ImageTracer.imageToSVG(
+        imageUrl,
+        (svg) => {
+          svgText = svg;
+          preview.innerHTML = svg;
+          statusEl.textContent = '完了しました。SVGをダウンロードできます。';
+          dlBtn.disabled = false;
+          runBtn.disabled = false;
+        },
+        options
+      );
+    });
+
+    dlBtn.addEventListener('click', () => {
+      if (!svgText) return;
+      const blob = new Blob([svgText], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vectorized.svg';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>

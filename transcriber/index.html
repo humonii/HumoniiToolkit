@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Humonii Toolkit | Transcriber</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/tool-page.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="../index.html">← Humonii Toolkit</a>
+  </div>
+
+  <main class="container">
+    <section class="hero">
+      <span class="badge">Audio Tool</span>
+      <h1>Browser Transcriber</h1>
+      <p>Whisperをブラウザ内で実行して、音声/動画を文字起こしします。</p>
+    </section>
+
+    <section class="grid">
+      <aside class="panel">
+        <h2>Settings</h2>
+        <label for="file">音声/動画ファイル</label>
+        <input id="file" type="file" accept="audio/*,video/*" />
+
+        <label for="lang">言語</label>
+        <select id="lang" style="width:100%; min-height:40px; border:1px solid #d3c8b8; border-radius:10px; padding:8px 10px; font:inherit;">
+          <option value="auto">Auto Detect</option>
+          <option value="ja" selected>Japanese</option>
+          <option value="en">English</option>
+        </select>
+
+        <label for="chunk">Chunk Length (sec)</label>
+        <input id="chunk" type="number" min="10" max="60" step="5" value="25" />
+
+        <div style="margin-top:12px; display:grid; gap:8px;">
+          <button id="run">Transcribe</button>
+          <button id="download-txt" class="alt" disabled>Download TXT</button>
+          <button id="download-srt" class="alt" disabled>Download SRT</button>
+        </div>
+
+        <p class="hint" id="status">ファイルを選択してください。初回はモデル読み込みに時間がかかります。</p>
+      </aside>
+
+      <section class="panel">
+        <h2>Transcript</h2>
+        <textarea id="result" placeholder="ここに文字起こし結果が表示されます"></textarea>
+      </section>
+    </section>
+  </main>
+
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+    const fileInput = document.getElementById('file');
+    const langInput = document.getElementById('lang');
+    const chunkInput = document.getElementById('chunk');
+    const runBtn = document.getElementById('run');
+    const dlTxtBtn = document.getElementById('download-txt');
+    const dlSrtBtn = document.getElementById('download-srt');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+
+    let transcriber = null;
+    let loadedFile = null;
+    let latestResult = null;
+
+    fileInput.addEventListener('change', () => {
+      loadedFile = fileInput.files?.[0] || null;
+      if (loadedFile) {
+        statusEl.textContent = `選択中: ${loadedFile.name}`;
+      }
+    });
+
+    async function ensureModel() {
+      if (!transcriber) {
+        statusEl.textContent = 'Whisperモデルを読み込み中...';
+        transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny');
+      }
+    }
+
+    async function fileToAudioArray(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+      const channel = audioBuffer.getChannelData(0);
+      // Whisper expects 16kHz mono. Transformers.js handles resampling internally,
+      // but mono float input keeps memory lower.
+      return new Float32Array(channel);
+    }
+
+    function toSrtTime(sec) {
+      const s = Math.max(0, sec);
+      const hh = Math.floor(s / 3600);
+      const mm = Math.floor((s % 3600) / 60);
+      const ss = Math.floor(s % 60);
+      const ms = Math.floor((s - Math.floor(s)) * 1000);
+      return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+    }
+
+    function buildSrt(chunks) {
+      if (!Array.isArray(chunks) || chunks.length === 0) {
+        return '1\n00:00:00,000 --> 00:00:05,000\n(No timestamp chunks available)\n';
+      }
+      return chunks.map((chunk, i) => {
+        const ts = chunk.timestamp || [0, 0];
+        const start = Number(ts[0] || 0);
+        const end = Number(ts[1] || start + 2);
+        const text = (chunk.text || '').trim();
+        return `${i + 1}\n${toSrtTime(start)} --> ${toSrtTime(end)}\n${text}\n`;
+      }).join('\n');
+    }
+
+    function downloadText(filename, content, mime = 'text/plain;charset=utf-8') {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    runBtn.addEventListener('click', async () => {
+      if (!loadedFile) {
+        statusEl.textContent = '先にファイルを選択してください。';
+        return;
+      }
+
+      runBtn.disabled = true;
+      dlTxtBtn.disabled = true;
+      dlSrtBtn.disabled = true;
+      resultEl.value = '';
+
+      try {
+        await ensureModel();
+        statusEl.textContent = '音声データを展開中...';
+        const audio = await fileToAudioArray(loadedFile);
+
+        statusEl.textContent = '文字起こし実行中...';
+        const lang = langInput.value === 'auto' ? null : langInput.value;
+        const chunkLength = Number(chunkInput.value);
+
+        latestResult = await transcriber(audio, {
+          chunk_length_s: chunkLength,
+          stride_length_s: Math.min(5, Math.max(2, Math.floor(chunkLength / 5))),
+          return_timestamps: true,
+          task: 'transcribe',
+          ...(lang ? { language: lang } : {}),
+        });
+
+        const text = (latestResult?.text || '').trim();
+        resultEl.value = text;
+        statusEl.textContent = '完了しました。TXT/SRTを保存できます。';
+        dlTxtBtn.disabled = false;
+        dlSrtBtn.disabled = false;
+      } catch (error) {
+        statusEl.textContent = `文字起こし失敗: ${error.message}`;
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+
+    dlTxtBtn.addEventListener('click', () => {
+      if (!latestResult) return;
+      const base = loadedFile?.name?.replace(/\.[^/.]+$/, '') || 'transcript';
+      downloadText(`${base}.txt`, latestResult.text || '');
+    });
+
+    dlSrtBtn.addEventListener('click', () => {
+      if (!latestResult) return;
+      const base = loadedFile?.name?.replace(/\.[^/.]+$/, '') || 'transcript';
+      const srt = buildSrt(latestResult.chunks || []);
+      downloadText(`${base}.srt`, srt);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Humonii Toolkit | Video Cutter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/tool-page.css" />
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="../index.html">← Humonii Toolkit</a>
+  </div>
+
+  <main class="container">
+    <section class="hero">
+      <span class="badge">Video Tool</span>
+      <h1>Video Cutter</h1>
+      <p>開始と終了を指定して、ffmpeg.wasm で MP4 を書き出します。</p>
+    </section>
+
+    <section class="grid">
+      <aside class="panel">
+        <h2>Cut Settings</h2>
+        <label for="file">動画ファイル</label>
+        <input id="file" type="file" accept="video/*" />
+
+        <label for="start">Start (sec)</label>
+        <input id="start" type="number" step="0.1" min="0" value="0" />
+
+        <label for="end">End (sec)</label>
+        <input id="end" type="number" step="0.1" min="0" value="0" />
+
+        <label for="seek">Preview Seek</label>
+        <input id="seek" type="range" min="0" max="0" step="0.01" value="0" />
+
+        <div style="margin-top:12px; display:grid; gap:8px;">
+          <button id="preview-btn">Preview Cut Loop</button>
+          <button id="export-btn" class="alt">Export MP4 (ffmpeg.wasm)</button>
+        </div>
+
+        <p class="hint" id="status">動画を選択してください。</p>
+      </aside>
+
+      <section class="panel">
+        <h2>Preview</h2>
+        <div class="preview">
+          <video id="video" controls playsinline style="width:100%;"></video>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+
+    const fileInput = document.getElementById('file');
+    const startInput = document.getElementById('start');
+    const endInput = document.getElementById('end');
+    const seekInput = document.getElementById('seek');
+    const previewBtn = document.getElementById('preview-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const statusEl = document.getElementById('status');
+    const video = document.getElementById('video');
+    const ffmpeg = createFFmpeg({ log: false });
+
+    let loopPreview = false;
+    let loadedFile = null;
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      loadedFile = file;
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      video.onloadedmetadata = () => {
+        startInput.value = '0';
+        endInput.value = String(video.duration.toFixed(2));
+        startInput.max = String(video.duration);
+        endInput.max = String(video.duration);
+        seekInput.max = String(video.duration);
+        seekInput.value = '0';
+        statusEl.textContent = `読み込み完了: ${video.duration.toFixed(2)}秒`;
+      };
+    });
+
+    seekInput.addEventListener('input', () => {
+      if (!Number.isFinite(video.duration)) return;
+      video.currentTime = Number(seekInput.value);
+    });
+
+    video.addEventListener('timeupdate', () => {
+      if (Number.isFinite(video.currentTime)) {
+        seekInput.value = String(video.currentTime);
+      }
+      if (!loopPreview) return;
+      const end = Number(endInput.value);
+      if (video.currentTime >= end) {
+        video.currentTime = Number(startInput.value);
+      }
+    });
+
+    previewBtn.addEventListener('click', async () => {
+      if (!video.src) return;
+      const start = Number(startInput.value);
+      const end = Number(endInput.value);
+      if (!(end > start)) {
+        statusEl.textContent = 'End は Start より大きくしてください。';
+        return;
+      }
+
+      loopPreview = true;
+      video.currentTime = start;
+      await video.play();
+      statusEl.textContent = `区間プレビュー中: ${start.toFixed(2)}s - ${end.toFixed(2)}s`;
+    });
+
+    async function ensureFfmpegLoaded() {
+      if (!ffmpeg.isLoaded()) {
+        statusEl.textContent = 'ffmpeg.wasm を読み込み中...（初回は数十秒かかる場合があります）';
+        await ffmpeg.load();
+      }
+    }
+
+    exportBtn.addEventListener('click', async () => {
+      if (!loadedFile) return;
+      const start = Number(startInput.value);
+      const end = Number(endInput.value);
+      if (!(end > start)) {
+        statusEl.textContent = 'End は Start より大きくしてください。';
+        return;
+      }
+
+      loopPreview = false;
+      statusEl.textContent = 'MP4書き出し中...';
+      exportBtn.disabled = true;
+
+      try {
+        await ensureFfmpegLoaded();
+
+        ffmpeg.FS('writeFile', 'input', await fetchFile(loadedFile));
+
+        const startSec = Math.max(0, start).toFixed(3);
+        const endSec = Math.max(start + 0.01, end).toFixed(3);
+
+        let success = false;
+        try {
+          await ffmpeg.run(
+            '-ss', startSec,
+            '-to', endSec,
+            '-i', 'input',
+            '-c', 'copy',
+            '-avoid_negative_ts', '1',
+            'output.mp4'
+          );
+          success = true;
+        } catch (_) {
+          // fallback to re-encode when stream copy fails
+        }
+
+        if (!success) {
+          await ffmpeg.run(
+            '-ss', startSec,
+            '-to', endSec,
+            '-i', 'input',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '23',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-pix_fmt', 'yuv420p',
+            'output.mp4'
+          );
+        }
+
+        const data = ffmpeg.FS('readFile', 'output.mp4');
+        const blob = new Blob([data.buffer], { type: 'video/mp4' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'cut-output.mp4';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        try { ffmpeg.FS('unlink', 'input'); } catch (_) {}
+        try { ffmpeg.FS('unlink', 'output.mp4'); } catch (_) {}
+
+        statusEl.textContent = '書き出し完了: cut-output.mp4';
+      } catch (error) {
+        statusEl.textContent = `書き出し失敗: ${error.message}`;
+      } finally {
+        exportBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

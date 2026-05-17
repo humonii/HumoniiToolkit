@@ -1,0 +1,229 @@
+:root {
+  --bg: #f2ece3;
+  --paper: #fff9ef;
+  --ink: #181716;
+  --muted: #57524b;
+  --line: #d8cdbc;
+  --accent: #1f8f7a;
+  --accent-soft: #d9f4ee;
+  --accent-2: #f47e4f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 15% -10%, #ffe2b8 0%, transparent 55%),
+    radial-gradient(900px 500px at 110% 20%, #bdebe0 0%, transparent 50%),
+    var(--bg);
+  font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+  line-height: 1.5;
+  padding: 28px clamp(16px, 4vw, 48px) 36px;
+  position: relative;
+}
+
+.noise {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.03) 0.6px, transparent 0.6px);
+  background-size: 3px 3px;
+  opacity: 0.45;
+}
+
+.hero {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 34px) clamp(16px, 3vw, 30px);
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  background: linear-gradient(160deg, #fff9ef, #fff5e4);
+  box-shadow: 0 16px 40px rgba(80, 66, 42, 0.08);
+  transform: translateY(10px);
+  opacity: 0;
+  animation: reveal 540ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.kicker {
+  margin: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #136d5d;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+h1 {
+  margin: 8px 0 12px;
+  font-family: "Syne", "Arial Black", sans-serif;
+  font-size: clamp(2.2rem, 6vw, 4.8rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #111 5%, #0f7f6c 42%, #f47e4f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+  max-width: 65ch;
+  font-size: clamp(0.98rem, 2vw, 1.12rem);
+}
+
+main {
+  max-width: 920px;
+  margin: 24px auto 0;
+}
+
+.section-head {
+  margin: 16px 2px 10px;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-family: "Syne", sans-serif;
+  font-size: clamp(1.35rem, 2.8vw, 2rem);
+}
+
+.section-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.tool-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.tool-card {
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  background: var(--paper);
+  box-shadow: 0 10px 24px rgba(50, 40, 28, 0.08);
+  display: grid;
+  gap: 10px;
+  transform: translateY(12px);
+  opacity: 0;
+  animation: reveal 500ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.tool-card:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.tool-card:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pill {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(140deg, var(--accent), #5ecfb7);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.tool-card h3 {
+  margin: 0;
+  font-size: 1.06rem;
+}
+
+.desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.tag {
+  font-size: 0.76rem;
+  border: 1px solid #d6cfbf;
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: #fffef7;
+}
+
+.launch {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-radius: 12px;
+  min-height: 40px;
+  padding: 0 14px;
+  background: linear-gradient(135deg, var(--accent), #0f6f5e);
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+.launch:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.07);
+}
+
+.launch.soon {
+  background: linear-gradient(135deg, #9a8f80, #7a6e60);
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.footer {
+  max-width: 920px;
+  margin: 20px auto 0;
+  padding: 8px 2px;
+  display: flex;
+  justify-content: space-between;
+  color: #5f5a52;
+  font-size: 0.85rem;
+}
+
+@keyframes reveal {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    padding-top: 18px;
+  }
+
+  .hero {
+    border-radius: 18px;
+  }
+
+  .tool-card {
+    border-radius: 14px;
+  }
+}

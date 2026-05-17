@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Mosaicker</title>
+    
+    <!-- MediaPipe Face Detection の読み込み -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --sidebar-color: #252526;
+            --accent-color: #007acc;
+            --text-color: #cccccc;
+            --border-color: #3e3e42;
+        }
+
+        body {
+            margin: 0; padding: 0; display: flex; height: 100vh;
+            background-color: var(--bg-color); color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        /* サイドバー */
+        #sidebar {
+            width: 320px; background-color: var(--sidebar-color);
+            border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; padding: 20px; box-sizing: border-box;
+        }
+
+        h2 { font-size: 1.2rem; margin-top: 0; color: #fff; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        
+        /* ドラッグ＆ドロップエリア */
+        #drop-zone {
+            border: 2px dashed #666; border-radius: 8px; padding: 40px 10px;
+            text-align: center; cursor: pointer; transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.02); margin-bottom: 20px;
+        }
+        #drop-zone.dragover { border-color: var(--accent-color); background: rgba(0, 122, 204, 0.1); }
+
+        /* メインエリア */
+        #main {
+            flex-grow: 1; display: flex; flex-direction: column; position: relative;
+        }
+
+        #canvas-container {
+            flex-grow: 1; display: flex; align-items: center; justify-content: center;
+            padding: 40px;
+            background-image: 
+                linear-gradient(45deg, #181818 25%, transparent 25%), 
+                linear-gradient(-45deg, #181818 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #181818 75%), 
+                linear-gradient(-45deg, transparent 75%, #181818 75%);
+            background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        canvas {
+            max-width: 100%; max-height: 100%;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5); background-color: #000;
+        }
+
+        /* ステータスバーとログ */
+        #log-panel {
+            height: 120px; background: #111; border-top: 1px solid var(--border-color);
+            padding: 10px; font-family: monospace; font-size: 0.85rem;
+            overflow-y: auto; color: #888;
+        }
+        .log-entry { margin-bottom: 4px; }
+        #status-bar {
+            height: 30px; background-color: var(--accent-color); color: white;
+            display: flex; align-items: center; padding: 0 15px; font-size: 0.8rem;
+        }
+
+        /* 非表示のVideo要素 */
+        video { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>Face Mosaicker</h2>
+        
+        <div id="drop-zone">
+            <strong>動画をドロップ</strong><br>
+            <span style="font-size: 0.8rem;">（.mp4, .webm 等）</span>
+        </div>
+
+        <div style="display: grid; gap: 8px; margin-bottom: 16px;">
+            <button id="download-processed-btn" disabled style="height: 36px; border: 0; border-radius: 8px; background: #2f934b; color: #fff; font-weight: 700; cursor: pointer;">処理後動画を保存 (WebM)</button>
+            <span id="export-hint" style="font-size: 0.78rem; color: #999;">動画処理完了後に保存できます。</span>
+        </div>
+
+        <div style="margin-top: auto; font-size: 0.85rem; color: #888;">
+            <p>※顔検出領域にモザイクを適用するモードです。</p>
+            <p><a href="../index.html" style="color: #7cc7ff;">← Tool Atelier に戻る</a></p>
+        </div>
+    </div>
+
+    <div id="main">
+        <div id="canvas-container">
+            <canvas id="output-canvas" width="800" height="450"></canvas>
+        </div>
+
+        <div id="log-panel"></div>
+
+        <div id="status-bar">システム起動中...</div>
+    </div>
+
+    <video id="input-video" muted playsinline></video>
+
+    <script>
+        const video = document.getElementById('input-video');
+        const canvas = document.getElementById('output-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const dropZone = document.getElementById('drop-zone');
+        const logPanel = document.getElementById('log-panel');
+        const statusBar = document.getElementById('status-bar');
+        const downloadProcessedBtn = document.getElementById('download-processed-btn');
+        const exportHint = document.getElementById('export-hint');
+        const DISPLAY_SCORE_THRESHOLD = 0.45;
+        const SCRFD_MODEL_URL = './models/det_500m.onnx';
+        const DRAW_BBOX_OUTLINE = false;
+        const MOSAIC_MIN_BLOCK = 3;
+        const MOSAIC_MAX_BLOCK = 10;
+        const MOSAIC_DIVISOR = 40;
+        const FACE_BLUR_RADIUS = 3;
+        const EDGE_FEATHER_RATIO = 0.18;
+        const FACE_EXPAND_X_RATIO = 0.18;
+        const FACE_EXPAND_TOP_RATIO = 0.28;
+        const FACE_EXPAND_BOTTOM_RATIO = 0.18;
+
+        const modeParam = new URLSearchParams(window.location.search).get('mode');
+        const DETECTOR_MODE = modeParam || 'candidate_scrfd';
+
+        let isProcessing = false;
+        let evaluation = null;
+        let detector = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let processedVideoBlob = null;
+
+        function pickWebmMimeType() {
+            const candidates = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+            ];
+            for (const mime of candidates) {
+                if (window.MediaRecorder && MediaRecorder.isTypeSupported(mime)) return mime;
+            }
+            return '';
+        }
+
+        function resetExportState() {
+            if (processedVideoBlob) {
+                processedVideoBlob = null;
+            }
+            recordedChunks = [];
+            downloadProcessedBtn.disabled = true;
+            exportHint.textContent = '動画処理完了後に保存できます。';
+        }
+
+        function setupProcessedRecorder() {
+            if (!window.MediaRecorder || !canvas.captureStream) {
+                addLog('このブラウザは動画出力に必要なAPIに対応していません。');
+                exportHint.textContent = 'このブラウザでは出力できません。';
+                return;
+            }
+
+            const mimeType = pickWebmMimeType();
+            if (!mimeType) {
+                addLog('利用可能な WebM コーデックが見つかりません。');
+                exportHint.textContent = '利用可能なコーデックがありません。';
+                return;
+            }
+
+            const canvasStream = canvas.captureStream(30);
+            const srcStream = video.captureStream ? video.captureStream() : null;
+            const audioTracks = srcStream ? srcStream.getAudioTracks() : [];
+            const mixedStream = new MediaStream([
+                ...canvasStream.getVideoTracks(),
+                ...(audioTracks.length ? [audioTracks[0]] : []),
+            ]);
+
+            recordedChunks = [];
+            mediaRecorder = new MediaRecorder(mixedStream, { mimeType });
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+            };
+            mediaRecorder.onstop = () => {
+                if (!recordedChunks.length) {
+                    addLog('出力データが空でした。');
+                    return;
+                }
+                processedVideoBlob = new Blob(recordedChunks, { type: mimeType });
+                downloadProcessedBtn.disabled = false;
+                exportHint.textContent = `保存準備OK (${(processedVideoBlob.size / (1024 * 1024)).toFixed(1)} MB)`;
+                addLog('処理後動画の保存準備ができました。');
+            };
+
+            mediaRecorder.start(200);
+            addLog('処理後動画の録画を開始しました。');
+        }
+
+        downloadProcessedBtn.addEventListener('click', () => {
+            if (!processedVideoBlob) return;
+            const url = URL.createObjectURL(processedVideoBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            const baseName = evaluation?.fileName ? evaluation.fileName.replace(/\.[^/.]+$/, '') : 'mosaicked';
+            a.download = `${baseName}_mosaicked.webm`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        });
+
+        function addLog(message) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerText = `> ${message}`;
+            logPanel.appendChild(entry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+        }
+
+        function startEvaluation(fileName) {
+            evaluation = {
+                fileName,
+                detectorMode: DETECTOR_MODE,
+                startedAt: new Date().toISOString(),
+                frames: 0,
+                framesWithDetection: 0,
+                totalDetections: 0,
+                latenciesMs: [],
+                records: []
+            };
+        }
+
+        function recordEvaluationFrame(drawnCount, latencyMs) {
+            if (!evaluation) return;
+
+            evaluation.frames += 1;
+            if (drawnCount > 0) evaluation.framesWithDetection += 1;
+            evaluation.totalDetections += drawnCount;
+            evaluation.latenciesMs.push(latencyMs);
+            evaluation.records.push({
+                frameIndex: evaluation.frames,
+                detectionCount: drawnCount,
+                hasDetection: drawnCount > 0,
+                latencyMs: Number(latencyMs.toFixed(3))
+            });
+        }
+
+        function finalizeEvaluation() {
+            if (!evaluation) return null;
+
+            const latencies = evaluation.latenciesMs.slice().sort((a, b) => a - b);
+            const averageLatencyMs = latencies.length
+                ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+                : 0;
+            const p95LatencyMs = latencies.length
+                ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
+                : 0;
+            const detectionFrameRate = evaluation.frames > 0
+                ? evaluation.framesWithDetection / evaluation.frames
+                : 0;
+
+            evaluation.finishedAt = new Date().toISOString();
+            evaluation.summary = {
+                detectionFrameRate,
+                averageLatencyMs,
+                p95LatencyMs,
+                averageDetectionsPerFrame: evaluation.frames > 0
+                    ? evaluation.totalDetections / evaluation.frames
+                    : 0
+            };
+
+            window.latestEvaluation = evaluation;
+            return evaluation;
+        }
+
+        function getDetectionScore(detection) {
+            if (Array.isArray(detection.score) && Number.isFinite(detection.score[0])) return detection.score[0];
+            if (Number.isFinite(detection.score)) return detection.score;
+            if (Number.isFinite(detection.confidence)) return detection.confidence;
+            if (Number.isFinite(detection.probability)) return detection.probability;
+            if (Array.isArray(detection.categories) && Number.isFinite(detection.categories[0]?.score)) {
+                return detection.categories[0].score;
+            }
+            return NaN;
+        }
+
+        function getRawBBox(detection) {
+            const primary = detection.boundingBox;
+            const relative = detection.locationData?.relativeBoundingBox;
+            const source = primary || relative;
+            if (!source) return null;
+
+            const x = Number.isFinite(source.xMin)
+                ? source.xMin
+                : Number.isFinite(source.xmin)
+                    ? source.xmin
+                    : (Number.isFinite(source.xCenter) && Number.isFinite(source.width)
+                        ? source.xCenter - source.width / 2
+                        : NaN);
+            const y = Number.isFinite(source.yMin)
+                ? source.yMin
+                : Number.isFinite(source.ymin)
+                    ? source.ymin
+                    : (Number.isFinite(source.yCenter) && Number.isFinite(source.height)
+                        ? source.yCenter - source.height / 2
+                        : NaN);
+            const w = Number.isFinite(source.width) ? source.width : NaN;
+            const h = Number.isFinite(source.height) ? source.height : NaN;
+
+            if (![x, y, w, h].every(Number.isFinite)) return null;
+            return { x, y, w, h };
+        }
+
+        function normalizeAndClampBBox(x, y, w, h) {
+            let nx = x;
+            let ny = y;
+            let nw = w;
+            let nh = h;
+
+            if (nx < 0) {
+                nw += nx;
+                nx = 0;
+            }
+            if (ny < 0) {
+                nh += ny;
+                ny = 0;
+            }
+            if (nx + nw > 1) nw = 1 - nx;
+            if (ny + nh > 1) nh = 1 - ny;
+
+            if (nw <= 0 || nh <= 0) return null;
+            return { x: nx, y: ny, w: nw, h: nh };
+        }
+
+        function drawBBox(x, y, w, h, score) {
+            ctx.strokeStyle = '#00FF00';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, w, h);
+
+            const hasScore = Number.isFinite(score);
+            const text = hasScore ? `Face: ${Math.round(score * 100)}%` : 'Face';
+
+            ctx.fillStyle = '#00FF00';
+            ctx.fillRect(x, y - 25, 100, 25);
+
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillText(text, x + 5, y - 8);
+        }
+
+        function mosaicBBox(x, y, w, h) {
+            const ix = Math.max(0, Math.floor(x));
+            const iy = Math.max(0, Math.floor(y));
+            const iw = Math.min(canvas.width - ix, Math.floor(w));
+            const ih = Math.min(canvas.height - iy, Math.floor(h));
+            if (iw <= 1 || ih <= 1) return;
+
+            // Smaller block size gives a finer mosaic (less coarse appearance).
+            const blockSize = Math.min(
+                MOSAIC_MAX_BLOCK,
+                Math.max(MOSAIC_MIN_BLOCK, Math.round(Math.min(iw, ih) / MOSAIC_DIVISOR))
+            );
+            const smallW = Math.max(1, Math.floor(iw / blockSize));
+            const smallH = Math.max(1, Math.floor(ih / blockSize));
+
+            const srcPatch = document.createElement('canvas');
+            srcPatch.width = iw;
+            srcPatch.height = ih;
+            const srcCtx = srcPatch.getContext('2d');
+            srcCtx.drawImage(canvas, ix, iy, iw, ih, 0, 0, iw, ih);
+
+            const facePatch = document.createElement('canvas');
+            facePatch.width = iw;
+            facePatch.height = ih;
+            const patchCtx = facePatch.getContext('2d');
+
+            const prevSmoothing = ctx.imageSmoothingEnabled;
+            // Keep smoothing on for a softer, blur-like mosaic.
+            ctx.imageSmoothingEnabled = true;
+            patchCtx.imageSmoothingEnabled = true;
+            patchCtx.drawImage(srcPatch, 0, 0, iw, ih, 0, 0, smallW, smallH);
+            patchCtx.drawImage(facePatch, 0, 0, smallW, smallH, 0, 0, iw, ih);
+            ctx.imageSmoothingEnabled = prevSmoothing;
+
+            // Add a light gaussian-like blur pass so the effect is visible even on small boxes.
+            const blurred = document.createElement('canvas');
+            blurred.width = iw;
+            blurred.height = ih;
+            const blurredCtx = blurred.getContext('2d');
+            blurredCtx.save();
+            blurredCtx.filter = `blur(${FACE_BLUR_RADIUS}px)`;
+            blurredCtx.drawImage(facePatch, 0, 0);
+            blurredCtx.restore();
+
+            const feather = Math.max(4, Math.round(Math.min(iw, ih) * EDGE_FEATHER_RATIO));
+            const mask = document.createElement('canvas');
+            mask.width = iw;
+            mask.height = ih;
+            const maskCtx = mask.getContext('2d');
+            maskCtx.fillStyle = 'rgba(0, 0, 0, 1)';
+            maskCtx.fillRect(0, 0, iw, ih);
+
+            maskCtx.globalCompositeOperation = 'destination-out';
+
+            const topGrad = maskCtx.createLinearGradient(0, 0, 0, feather);
+            topGrad.addColorStop(0, 'rgba(0,0,0,1)');
+            topGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            maskCtx.fillStyle = topGrad;
+            maskCtx.fillRect(0, 0, iw, feather);
+
+            const bottomGrad = maskCtx.createLinearGradient(0, ih - feather, 0, ih);
+            bottomGrad.addColorStop(0, 'rgba(0,0,0,0)');
+            bottomGrad.addColorStop(1, 'rgba(0,0,0,1)');
+            maskCtx.fillStyle = bottomGrad;
+            maskCtx.fillRect(0, ih - feather, iw, feather);
+
+            const leftGrad = maskCtx.createLinearGradient(0, 0, feather, 0);
+            leftGrad.addColorStop(0, 'rgba(0,0,0,1)');
+            leftGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            maskCtx.fillStyle = leftGrad;
+            maskCtx.fillRect(0, 0, feather, ih);
+
+            const rightGrad = maskCtx.createLinearGradient(iw - feather, 0, iw, 0);
+            rightGrad.addColorStop(0, 'rgba(0,0,0,0)');
+            rightGrad.addColorStop(1, 'rgba(0,0,0,1)');
+            maskCtx.fillStyle = rightGrad;
+            maskCtx.fillRect(iw - feather, 0, feather, ih);
+
+            blurredCtx.globalCompositeOperation = 'destination-in';
+            blurredCtx.drawImage(mask, 0, 0);
+
+            ctx.drawImage(blurred, ix, iy, iw, ih);
+        }
+
+        function renderDetections(detections) {
+            let drawnCount = 0;
+            for (const det of detections) {
+                const x = det.x * canvas.width;
+                const y = det.y * canvas.height;
+                const w = det.w * canvas.width;
+                const h = det.h * canvas.height;
+                if (w > 0 && h > 0) {
+                    const padX = w * FACE_EXPAND_X_RATIO;
+                    const padTop = h * FACE_EXPAND_TOP_RATIO;
+                    const padBottom = h * FACE_EXPAND_BOTTOM_RATIO;
+
+                    const ex = Math.max(0, x - padX);
+                    const ey = Math.max(0, y - padTop);
+                    const ex2 = Math.min(canvas.width, x + w + padX);
+                    const ey2 = Math.min(canvas.height, y + h + padBottom);
+                    const ew = ex2 - ex;
+                    const eh = ey2 - ey;
+
+                    mosaicBBox(ex, ey, ew, eh);
+                    if (DRAW_BBOX_OUTLINE) {
+                        drawBBox(ex, ey, ew, eh, det.score);
+                    }
+                    drawnCount += 1;
+                }
+            }
+            return drawnCount;
+        }
+
+        class MediaPipeDetector {
+            constructor() {
+                this.instance = null;
+                this.pendingResolve = null;
+                this.pendingTimeout = null;
+            }
+
+            async init() {
+                addLog('MediaPipe モデルをダウンロード中...');
+                this.instance = new FaceDetection({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` });
+                this.instance.setOptions({
+                    model: 'short',
+                    minDetectionConfidence: 0.5
+                });
+                this.instance.onResults((results) => {
+                    if (this.pendingTimeout) clearTimeout(this.pendingTimeout);
+                    const parsed = this.parseResults(results);
+                    if (this.pendingResolve) {
+                        this.pendingResolve(parsed);
+                        this.pendingResolve = null;
+                    }
+                });
+                await this.instance.initialize();
+            }
+
+            parseResults(results) {
+                const output = [];
+                if (!results.detections || results.detections.length === 0) return output;
+
+                for (const detection of results.detections) {
+                    const rawBBox = getRawBBox(detection);
+                    if (!rawBBox) continue;
+
+                    const score = getDetectionScore(detection);
+                    if (Number.isFinite(score) && score < DISPLAY_SCORE_THRESHOLD) continue;
+
+                    const normalized = normalizeAndClampBBox(rawBBox.x, rawBBox.y, rawBBox.w, rawBBox.h);
+                    if (!normalized) continue;
+
+                    output.push({
+                        x: normalized.x,
+                        y: normalized.y,
+                        w: normalized.w,
+                        h: normalized.h,
+                        score
+                    });
+                }
+                return output;
+            }
+
+            async detect(image) {
+                return new Promise(async (resolve, reject) => {
+                    this.pendingResolve = resolve;
+                    this.pendingTimeout = setTimeout(() => {
+                        if (this.pendingResolve) {
+                            this.pendingResolve([]);
+                            this.pendingResolve = null;
+                        }
+                    }, 1000);
+                    try {
+                        await this.instance.send({ image });
+                    } catch (error) {
+                        if (this.pendingTimeout) clearTimeout(this.pendingTimeout);
+                        this.pendingResolve = null;
+                        reject(error);
+                    }
+                });
+            }
+
+            async dispose() {
+                if (this.instance && typeof this.instance.close === 'function') {
+                    this.instance.close();
+                }
+            }
+        }
+
+        class ScrfdDetector {
+            constructor() {
+                this.session = null;
+                this.INPUT_SIZE = 640;
+                this.STRIDES = [8, 16, 32];
+                this.NUM_ANCHORS = 2;
+                // Output node names from model inspection
+                this.OUTPUT_NAMES = {
+                    8:  { score: '443', bbox: '446' },
+                    16: { score: '468', bbox: '471' },
+                    32: { score: '493', bbox: '496' },
+                };
+            }
+
+            async init() {
+                if (!window.ort) throw new Error('onnxruntime-web のロードに失敗しました。');
+
+                if (window.location.protocol === 'file:') {
+                    throw new Error(
+                        'file:// で開くとSCRFDモデルを取得できません。' +
+                        ' http://localhost:8765/demo.html で開いてください。'
+                    );
+                }
+
+                const modelCandidates = Array.from(new Set([
+                    SCRFD_MODEL_URL,
+                    './models/det_500m.onnx',
+                    '/models/det_500m.onnx',
+                    `${window.location.origin}/models/det_500m.onnx`,
+                ]));
+
+                let lastError = null;
+                for (const modelUrl of modelCandidates) {
+                    addLog(`SCRFD モデルをロード中: ${modelUrl}`);
+                    for (let attempt = 1; attempt <= 3; attempt++) {
+                        try {
+                            const response = await fetch(modelUrl, { cache: 'no-store' });
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}`);
+                            }
+
+                            const modelBuffer = await response.arrayBuffer();
+                            this.session = await ort.InferenceSession.create(modelBuffer, {
+                                executionProviders: ['webgpu', 'wasm'],
+                            });
+                            addLog('SCRFD セッション初期化完了。');
+                            return;
+                        } catch (error) {
+                            lastError = error;
+                            addLog(`SCRFD ロード失敗 (${attempt}/3): ${error.message}`);
+                        }
+                    }
+                }
+
+                throw new Error(`SCRFDモデルの取得に失敗しました: ${lastError?.message || 'unknown error'}`);
+            }
+
+            _preprocess(imageElement) {
+                const S = this.INPUT_SIZE;
+                const offscreen = document.createElement('canvas');
+                offscreen.width = S;
+                offscreen.height = S;
+                const ctx2 = offscreen.getContext('2d');
+                ctx2.fillStyle = 'black';
+                ctx2.fillRect(0, 0, S, S);
+
+                const srcW = imageElement.videoWidth || imageElement.width;
+                const srcH = imageElement.videoHeight || imageElement.height;
+                const imRatio = srcH / srcW;
+                const modelRatio = 1.0;
+                let newW;
+                let newH;
+                if (imRatio > modelRatio) {
+                    newH = S;
+                    newW = Math.round(newH / imRatio);
+                } else {
+                    newW = S;
+                    newH = Math.round(newW * imRatio);
+                }
+
+                ctx2.drawImage(imageElement, 0, 0, newW, newH);
+                const { data } = ctx2.getImageData(0, 0, S, S);
+                const N = S * S;
+                const tensor = new Float32Array(3 * N);
+                for (let i = 0; i < N; i++) {
+                    tensor[i]         = (data[i * 4]     - 127.5) / 128.0; // R
+                    tensor[N + i]     = (data[i * 4 + 1] - 127.5) / 128.0; // G
+                    tensor[2 * N + i] = (data[i * 4 + 2] - 127.5) / 128.0; // B
+                }
+                return {
+                    tensor: new ort.Tensor('float32', tensor, [1, 3, S, S]),
+                    srcW,
+                    srcH,
+                    detScale: newH / srcH,
+                    resizedW: newW,
+                    resizedH: newH,
+                };
+            }
+
+            _generateAnchors(stride) {
+                const size = this.INPUT_SIZE / stride;
+                const centers = [];
+                for (let i = 0; i < size; i++) {
+                    for (let j = 0; j < size; j++) {
+                        for (let a = 0; a < this.NUM_ANCHORS; a++) {
+                            centers.push(j * stride, i * stride);
+                        }
+                    }
+                }
+                return centers; // flat [cx, cy, cx, cy, ...]
+            }
+
+            _decodeStride(scores, bboxes, stride, threshold) {
+                const anchors = this._generateAnchors(stride);
+                const results = [];
+                const n = scores.length;
+                for (let i = 0; i < n; i++) {
+                    const score = scores[i];
+                    if (score < threshold) continue;
+                    const cx = anchors[i * 2];
+                    const cy = anchors[i * 2 + 1];
+                    // SCRFD bbox output is stride-relative distances [l, t, r, b].
+                    const l = bboxes[i * 4] * stride;
+                    const t = bboxes[i * 4 + 1] * stride;
+                    const r = bboxes[i * 4 + 2] * stride;
+                    const b = bboxes[i * 4 + 3] * stride;
+                    results.push({
+                        x1: cx - l,
+                        y1: cy - t,
+                        x2: cx + r,
+                        y2: cy + b,
+                        score,
+                    });
+                }
+                return results;
+            }
+
+            _iou(a, b) {
+                const ix1 = Math.max(a.x1, b.x1);
+                const iy1 = Math.max(a.y1, b.y1);
+                const ix2 = Math.min(a.x2, b.x2);
+                const iy2 = Math.min(a.y2, b.y2);
+                const inter = Math.max(0, ix2 - ix1) * Math.max(0, iy2 - iy1);
+                if (inter === 0) return 0;
+                const aA = (a.x2 - a.x1) * (a.y2 - a.y1);
+                const bA = (b.x2 - b.x1) * (b.y2 - b.y1);
+                return inter / (aA + bA - inter);
+            }
+
+            _nms(boxes, iouThreshold = 0.45) {
+                boxes.sort((a, b) => b.score - a.score);
+                const suppressed = new Uint8Array(boxes.length);
+                const keep = [];
+                for (let i = 0; i < boxes.length; i++) {
+                    if (suppressed[i]) continue;
+                    keep.push(boxes[i]);
+                    for (let j = i + 1; j < boxes.length; j++) {
+                        if (!suppressed[j] && this._iou(boxes[i], boxes[j]) > iouThreshold) {
+                            suppressed[j] = 1;
+                        }
+                    }
+                }
+                return keep;
+            }
+
+            async detect(imageElement) {
+                if (!this.session) return [];
+                const S = this.INPUT_SIZE;
+                const prep = this._preprocess(imageElement);
+                const outputs = await this.session.run({ 'input.1': prep.tensor });
+
+                const allBoxes = [];
+                for (const stride of this.STRIDES) {
+                    const { score: sName, bbox: bName } = this.OUTPUT_NAMES[stride];
+                    const decoded = this._decodeStride(
+                        outputs[sName].data,
+                        outputs[bName].data,
+                        stride,
+                        DISPLAY_SCORE_THRESHOLD
+                    );
+                    allBoxes.push(...decoded);
+                }
+
+                const finalBoxes = this._nms(allBoxes);
+                return finalBoxes.map(b => ({
+                    x: Math.max(0, b.x1 / prep.detScale) / prep.srcW,
+                    y: Math.max(0, b.y1 / prep.detScale) / prep.srcH,
+                    w: (
+                        Math.min(prep.srcW, b.x2 / prep.detScale) -
+                        Math.max(0, b.x1 / prep.detScale)
+                    ) / prep.srcW,
+                    h: (
+                        Math.min(prep.srcH, b.y2 / prep.detScale) -
+                        Math.max(0, b.y1 / prep.detScale)
+                    ) / prep.srcH,
+                    score: b.score,
+                })).filter(d => d.w > 0 && d.h > 0);
+            }
+
+            async dispose() {
+                this.session = null;
+            }
+        }
+
+        async function createDetectorByMode(mode) {
+            if (mode === 'candidate_scrfd' || mode === 'candidate_scrfd_500m') return new ScrfdDetector();
+            if (mode === 'baseline_mediapipe') return new MediaPipeDetector();
+            return new ScrfdDetector(); // デフォルト
+        }
+
+        async function initializeDetector() {
+            try {
+                detector = await createDetectorByMode(DETECTOR_MODE);
+                await detector.init();
+                addLog(`検出器モード: ${DETECTOR_MODE}`);
+            } catch (error) {
+                addLog(`警告: ${DETECTOR_MODE} の初期化に失敗 (${error.message})`);
+                addLog('baseline_mediapipe にフォールバックします。');
+                detector = new MediaPipeDetector();
+                await detector.init();
+            }
+
+            addLog('準備完了！動画をドロップしてください。');
+            statusBar.innerText = 'READY';
+            statusBar.style.backgroundColor = '#28a745';
+        }
+
+        initializeDetector().catch((err) => {
+            addLog(`致命的エラー: ${err.message}`);
+            statusBar.innerText = 'ERROR';
+            statusBar.style.backgroundColor = '#dc3545';
+        });
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.type.startsWith('video/')) {
+                addLog('エラー: 動画ファイルを選択してください。');
+                return;
+            }
+
+            addLog(`ファイル読み込み: ${file.name}`);
+            statusBar.innerText = 'PROCESSING...';
+            statusBar.style.backgroundColor = '#007acc';
+            startEvaluation(file.name);
+            resetExportState();
+
+            const url = URL.createObjectURL(file);
+            video.src = url;
+
+            video.onloadeddata = () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                addLog(`解像度設定: ${canvas.width}x${canvas.height}`);
+
+                setupProcessedRecorder();
+
+                video.play();
+                isProcessing = true;
+                processVideoFrame();
+            };
+        });
+
+        async function processVideoFrame() {
+            if (!isProcessing || video.paused || video.ended) return;
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const startedAt = performance.now();
+            const detections = await detector.detect(video);
+            const latencyMs = performance.now() - startedAt;
+            const drawnCount = renderDetections(detections);
+            recordEvaluationFrame(drawnCount, latencyMs);
+
+            requestAnimationFrame(processVideoFrame);
+        }
+
+        video.onended = async () => {
+            isProcessing = false;
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            addLog('動画の再生と解析が完了しました。');
+            const report = finalizeEvaluation();
+            if (report && report.summary) {
+                const detectionRatePercent = Math.round(report.summary.detectionFrameRate * 1000) / 10;
+                addLog(`評価: 検出フレーム率 ${detectionRatePercent}% / p95遅延 ${report.summary.p95LatencyMs.toFixed(1)}ms`);
+            }
+            statusBar.innerText = 'READY';
+            statusBar.style.backgroundColor = '#28a745';
+            if (detector && typeof detector.dispose === 'function') {
+                await detector.dispose();
+            }
+        };
+    </script>
+</body>
+</html>

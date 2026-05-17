@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Humonii Toolkit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/site.css" />
+</head>
+<body>
+  <div class="noise"></div>
+
+  <header class="hero">
+    <p class="kicker">Humonii Creative Stack</p>
+    <h1>Humonii Toolkit</h1>
+    <p class="lead">
+      Humonii の制作ワークフローを加速する、ツール集約ハブです。
+      第一号の Mosaicker を起点に、この場所へ実用ツールを増やしていきます。
+    </p>
+  </header>
+
+  <main>
+    <section class="section-head">
+      <h2>Available Tools</h2>
+      <p>カードをクリックすると個別ツールを開きます。</p>
+    </section>
+
+    <section id="tool-grid" class="tool-grid" aria-live="polite"></section>
+  </main>
+
+  <footer class="footer">
+    <span>Humonii Toolkit</span>
+    <span id="tool-count">0 tools</span>
+  </footer>
+
+  <template id="tool-card-template">
+    <article class="tool-card">
+      <div class="card-top">
+        <span class="pill"></span>
+        <h3></h3>
+      </div>
+      <p class="desc"></p>
+      <div class="tags"></div>
+      <a class="launch" target="_self" rel="noopener">Open Tool</a>
+    </article>
+  </template>
+
+  <script type="module" src="./assets/tools.js"></script>
+</body>
+</html>
