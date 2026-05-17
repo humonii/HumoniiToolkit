@@ -239,6 +239,15 @@
             return '';
         }
 
+        function setDownloadButtonState(enabled) {
+            downloadProcessedBtn.disabled = !enabled;
+            downloadProcessedBtn.style.background = enabled ? '#2f934b' : '#6b6b6b';
+            downloadProcessedBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+            downloadProcessedBtn.style.opacity = enabled ? '1' : '0.75';
+        }
+
+        setDownloadButtonState(false);
+
         function getDetectorModeLabel(mode) {
             if (mode === 'candidate_scrfd' || mode === 'candidate_scrfd_500m') return 'SCRFD';
             if (mode === 'baseline_mediapipe') return 'MediaPipe';
@@ -273,7 +282,7 @@
             processedOutputMimeType = '';
             processedOutputExtension = '.webm';
             processedOutputBlob = null;
-            downloadProcessedBtn.disabled = true;
+            setDownloadButtonState(false);
             downloadProcessedBtn.textContent = '処理後動画を保存';
             exportHint.textContent = '動画処理完了後に保存できます。';
             updateModePanel();
@@ -372,14 +381,14 @@
                 await processedOutputWriteChain;
                 await processedOutputWriter.close();
                 processedOutputWriter = null;
-                downloadProcessedBtn.disabled = false;
+                setDownloadButtonState(true);
                 exportHint.textContent = `保存準備OK (${(processedOutputBytes / (1024 * 1024)).toFixed(1)} MB)`;
                 addLog('処理後動画の保存準備ができました。');
                 return;
             }
 
             if (processedOutputBlob) {
-                downloadProcessedBtn.disabled = false;
+                setDownloadButtonState(true);
                 exportHint.textContent = `保存準備OK (${(processedOutputBlob.size / (1024 * 1024)).toFixed(1)} MB)`;
                 addLog('処理後動画の保存準備ができました。');
                 return;
