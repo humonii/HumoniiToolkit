@@ -121,13 +121,13 @@
         const statusBar = document.getElementById('status-bar');
         const downloadProcessedBtn = document.getElementById('download-processed-btn');
         const exportHint = document.getElementById('export-hint');
-        const DISPLAY_SCORE_THRESHOLD = 0.45;
+        const DISPLAY_SCORE_THRESHOLD = 0.25;
         const SCRFD_MODEL_URL = './models/det_500m.onnx';
         const DRAW_BBOX_OUTLINE = false;
         const MOSAIC_MIN_BLOCK = 3;
-        const MOSAIC_MAX_BLOCK = 10;
-        const MOSAIC_DIVISOR = 40;
-        const FACE_BLUR_RADIUS = 3;
+        const MOSAIC_MAX_BLOCK = 20;
+        const MOSAIC_DIVISOR = 25;
+        const FACE_BLUR_RADIUS = 6;
         const EDGE_FEATHER_RATIO = 0.18;
         const FACE_EXPAND_X_RATIO = 0.18;
         const FACE_EXPAND_TOP_RATIO = 0.28;
@@ -319,11 +319,13 @@
                 fileName,
                 detectorMode: DETECTOR_MODE,
                 startedAt: new Date().toISOString(),
+                startedAtMs: performance.now(),
                 frames: 0,
                 framesWithDetection: 0,
                 totalDetections: 0,
                 latenciesMs: [],
-                records: []
+                records: [],
+                estimatedTotalFrames: Math.round((video.duration || 0) * 30)
             };
         }
 
@@ -340,6 +342,16 @@
                 hasDetection: drawnCount > 0,
                 latencyMs: Number(latencyMs.toFixed(3))
             });
+
+            const elapsedMs = performance.now() - evaluation.startedAtMs;
+            const elapsedSec = elapsedMs / 1000;
+            const processingSpeed = evaluation.frames / (elapsedSec || 1);
+            const remainingFrames = Math.max(0, evaluation.estimatedTotalFrames - evaluation.frames);
+            const estimatedRemainingSec = Math.max(0, remainingFrames / (processingSpeed || 1));
+            const remainingText = estimatedRemainingSec > 0 
+                ? ` (残り約 ${Math.ceil(estimatedRemainingSec)}s)`
+                : '';
+            statusBar.innerText = `処理中... ${evaluation.frames} / ${evaluation.estimatedTotalFrames} フレーム | ${processingSpeed.toFixed(1)} fps${remainingText}`;
         }
 
         function finalizeEvaluation() {
@@ -570,7 +582,7 @@
                 this.instance = new FaceDetection({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}` });
                 this.instance.setOptions({
                     model: 'short',
-                    minDetectionConfidence: 0.5
+                    minDetectionConfidence: 0.3
                 });
                 this.instance.onResults((results) => {
                     if (this.pendingTimeout) clearTimeout(this.pendingTimeout);
@@ -893,6 +905,7 @@
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 addLog(`解像度設定: ${canvas.width}x${canvas.height}`);
+                addLog(`動画時間: ${video.duration.toFixed(1)}秒 (推定フレーム数: ${evaluation.estimatedTotalFrames})`);
 
                 await setupProcessedOutput(file.name);
 
