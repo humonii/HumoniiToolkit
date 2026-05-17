@@ -221,6 +221,11 @@
         let scrfdLastError = '';
         let frameSnapshotCanvas = null;
         let frameSnapshotCtx = null;
+        const filePickerInput = document.createElement('input');
+        filePickerInput.type = 'file';
+        filePickerInput.accept = 'video/*';
+        filePickerInput.style.display = 'none';
+        document.body.appendChild(filePickerInput);
 
         function pickWebmMimeType() {
             const candidates = [
@@ -1116,37 +1121,24 @@
             statusBar.style.backgroundColor = '#dc3545';
         });
 
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        async function startProcessingFromFile(file, fileHandle = null) {
+            if (isProcessing) {
+                addLog('現在処理中です。完了後に別の動画を選択してください。');
+                return;
+            }
 
-        dropZone.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-
-            const file = e.dataTransfer.files[0];
             if (!file || !file.type.startsWith('video/')) {
                 addLog('エラー: 動画ファイルを選択してください。');
                 return;
             }
+
             sourceVideoExtension = getOutputExtension(file.name);
             scrfdLastDetections = 0;
             scrfdNoDetectionStreak = 0;
             scrfdLastError = '';
             updateModePanel();
 
-            sourceVideoFileHandle = null;
-            const firstItem = e.dataTransfer.items && e.dataTransfer.items[0];
-            if (firstItem && typeof firstItem.getAsFileSystemHandle === 'function') {
-                try {
-                    const handle = await firstItem.getAsFileSystemHandle();
-                    if (handle && handle.kind === 'file') {
-                        sourceVideoFileHandle = handle;
-                        addLog('保存時の初期フォルダに入力動画の場所を使用します。');
-                    }
-                } catch (error) {
-                    addLog(`入力動画のフォルダ情報を取得できませんでした: ${error.message}`);
-                }
-            }
+            sourceVideoFileHandle = fileHandle;
 
             addLog(`ファイル読み込み: ${file.name}`);
             statusText.innerText = 'PROCESSING...';
@@ -1182,6 +1174,66 @@
                 isProcessing = true;
                 processVideoFrame();
             };
+        }
+
+        dropZone.addEventListener('click', async () => {
+            if (window.showOpenFilePicker) {
+                try {
+                    const [handle] = await window.showOpenFilePicker({
+                        multiple: false,
+                        startIn: 'videos',
+                        types: [{
+                            description: 'Video files',
+                            accept: {
+                                'video/*': ['.mp4', '.webm', '.mov', '.m4v', '.avi', '.mkv'],
+                            },
+                        }],
+                    });
+                    if (handle) {
+                        const file = await handle.getFile();
+                        await startProcessingFromFile(file, handle);
+                        return;
+                    }
+                } catch (error) {
+                    if (error && error.name !== 'AbortError') {
+                        addLog(`ファイルピッカー利用不可のため通常ダイアログに切り替えます: ${error.message}`);
+                    }
+                }
+            }
+
+            filePickerInput.click();
+        });
+
+        filePickerInput.addEventListener('change', async () => {
+            const file = filePickerInput.files && filePickerInput.files[0];
+            filePickerInput.value = '';
+            if (!file) return;
+            await startProcessingFromFile(file, null);
+        });
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const file = e.dataTransfer.files[0];
+            let fileHandle = null;
+            const firstItem = e.dataTransfer.items && e.dataTransfer.items[0];
+            if (firstItem && typeof firstItem.getAsFileSystemHandle === 'function') {
+                try {
+                    const handle = await firstItem.getAsFileSystemHandle();
+                    if (handle && handle.kind === 'file') {
+                        fileHandle = handle;
+                        addLog('保存時の初期フォルダに入力動画の場所を使用します。');
+                    }
+                } catch (error) {
+                    addLog(`入力動画のフォルダ情報を取得できませんでした: ${error.message}`);
+                }
+            }
+
+            await startProcessingFromFile(file, fileHandle);
         });
 
         async function processVideoFrame() {
