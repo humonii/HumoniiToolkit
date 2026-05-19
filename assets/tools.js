@@ -1,5 +1,12 @@
 const tools = [
   {
+    name: "Balance Analyzer",
+    description: "床反力計CSVからCOP軌跡・推定重心軌跡・重心動揺指標を可視化し、複数試行の比較とエクスポートを行います。",
+    href: "./balance_analyzer/index.html",
+    tags: ["Balance", "COP", "CSV", "Plotly"],
+    status: "ready",
+  },
+  {
     name: "Mosaicker",
     description: "SCRFDベースの顔検出で、動画にフェード付きモザイクを適用し処理後動画を保存できます。",
     href: "./face_mask/demo.html?mode=candidate_scrfd",

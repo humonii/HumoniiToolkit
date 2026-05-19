@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Humonii Toolkit | Balance Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/tool-page.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script defer src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+  <script type="module" defer src="./app.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="../index.html">← Humonii Toolkit</a>
+    <a class="sample-link" href="./sample/sample_force_plate.csv">サンプルCSV</a>
+  </div>
+
+  <main class="container analyzer-shell">
+    <section class="hero">
+      <span class="badge">Balance Tool</span>
+      <h1>Balance Analyzer</h1>
+      <p>床反力計CSVをブラウザ内で読み込み、COP軌跡・推定重心軌跡・重心動揺指標を可視化します。データは外部サーバーに送信されず、ブラウザ内で処理されます。</p>
+    </section>
+
+    <section class="grid analyzer-grid">
+      <aside class="panel control-panel">
+        <h2>読み込み</h2>
+        <p class="hint">Shift-JIS / CP932 形式の床反力計CSVに対応しています。複数ファイルの同時読込が可能です。データはブラウザ内のみで処理されます。</p>
+        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="CSVファイルをドラッグアンドドロップ">
+          <strong>CSVファイルをここにドラッグ&ドロップ</strong>
+          <span>またはファイルを選択</span>
+        </div>
+        <input id="file-input" type="file" accept=".csv,text/csv" multiple hidden />
+        <button id="pick-files" type="button">ファイルを選択</button>
+        <button id="load-sample" type="button" class="alt">サンプルCSVを読み込む</button>
+        <button id="reset-files" type="button" class="alt">読み込みをリセット</button>
+
+        <div class="status-stack">
+          <p id="status" class="hint status-text">CSVを読み込むと解析結果を表示します。</p>
+          <p id="runtime-status" class="hint runtime-text">Python runtime loading...</p>
+          <p id="error-banner" class="error-banner" hidden></p>
+        </div>
+
+        <div class="divider"></div>
+
+        <h2>表示・比較設定</h2>
+        <p class="hint">表示軌跡は COP (xp / yp) 固定です。COP軌跡プロットの凡例は file_1, file_2... の順で表示されます。</p>
+
+        <label for="metric-select">比較指標（棒グラフ）</label>
+        <select id="metric-select"></select>
+
+        <div class="divider"></div>
+
+        <h2>エクスポート</h2>
+        <p class="hint">現在読み込み中の解析結果を CSV / JSON / PNG として保存できます。</p>
+
+        <div class="button-stack compact">
+          <button id="export-metrics" type="button">指標CSVを書き出す</button>
+          <button id="export-json" type="button">解析JSONを書き出す</button>
+          <button id="export-trajectory-png" type="button">COP軌跡PNG</button>
+          <button id="export-timeseries-png" type="button">時系列PNG</button>
+          <button id="export-compare-png" type="button">比較PNG</button>
+        </div>
+      </aside>
+
+      <section class="content-stack">
+        <section class="panel">
+          <div class="section-headline">
+            <h2>読み込みファイル</h2>
+            <p class="hint">カード内は情報表示のみです。解析対象は COP (xp / yp) 固定です。</p>
+          </div>
+          <div id="file-list" class="file-list empty-state">
+            <p>まだCSVが読み込まれていません。</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-headline">
+            <h2>COP軌跡プロット</h2>
+            <p class="hint">開始点と終了点を表示し、複数ファイルを重ね描きします。</p>
+          </div>
+          <div id="trajectory-plot" class="plot-surface"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-headline">
+            <h2>時系列プロット</h2>
+            <p class="hint">time vs x / y と速度時系列を表示します。</p>
+          </div>
+          <div id="timeseries-plot" class="plot-surface tall"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-headline">
+            <h2>重心動揺指標</h2>
+            <p class="hint">COP (xp / yp) 固定で計算した結果です。</p>
+          </div>
+          <div class="table-wrap">
+            <table id="metrics-table" class="data-table"></table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-headline">
+            <h2>指標比較プロット</h2>
+            <p class="hint">選択中の指標をファイルごとの棒グラフで比較します。</p>
+          </div>
+          <div id="compare-plot" class="plot-surface"></div>
+        </section>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

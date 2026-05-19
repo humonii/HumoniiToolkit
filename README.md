@@ -8,6 +8,7 @@ Humonii の制作ワークフロー向けツール集です。
 
 ## Tools
 
+- [Balance Analyzer](https://humonii.github.io/HumoniiToolkit/balance_analyzer/)
 - [Mosaicker](https://humonii.github.io/HumoniiToolkit/face_mask/demo.html?mode=candidate_scrfd)
 - [Image Vectorizer](https://humonii.github.io/HumoniiToolkit/vectorizer/index.html)
 - [Video Cutter](https://humonii.github.io/HumoniiToolkit/video_cutter/index.html)

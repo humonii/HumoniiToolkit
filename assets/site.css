@@ -1,12 +1,16 @@
 :root {
-  --bg: #f2ece3;
-  --paper: #fff9ef;
-  --ink: #181716;
-  --muted: #57524b;
-  --line: #d8cdbc;
-  --accent: #1f8f7a;
-  --accent-soft: #d9f4ee;
-  --accent-2: #f47e4f;
+  --bg: #f6f4ff;
+  --paper: #ffffff;
+  --ink: #241a35;
+  --muted: #5d4d74;
+  --line: #d8cff6;
+  --accent: #6f5bff;
+  --accent-soft: #eee9ff;
+  --accent-2: #ff67b3;
+  --u-cyan: #69e7ff;
+  --u-mint: #84ffcc;
+  --u-violet: #b58cff;
+  --u-pink: #ff8fd5;
 }
 
 * {
@@ -22,8 +26,9 @@ body {
 body {
   color: var(--ink);
   background:
-    radial-gradient(1200px 600px at 15% -10%, #ffe2b8 0%, transparent 55%),
-    radial-gradient(900px 500px at 110% 20%, #bdebe0 0%, transparent 50%),
+    radial-gradient(1200px 700px at -10% -20%, #ffd5f1 0%, transparent 58%),
+    radial-gradient(1100px 650px at 120% 10%, #c8f6ff 0%, transparent 56%),
+    radial-gradient(900px 520px at 40% 115%, #d9d3ff 0%, transparent 60%),
     var(--bg);
   font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
   line-height: 1.5;
@@ -37,17 +42,19 @@ body {
   inset: 0;
   background-image: radial-gradient(rgba(0, 0, 0, 0.03) 0.6px, transparent 0.6px);
   background-size: 3px 3px;
-  opacity: 0.45;
+  opacity: 0.26;
 }
 
 .hero {
   max-width: 920px;
   margin: 0 auto;
   padding: clamp(20px, 4vw, 34px) clamp(16px, 3vw, 30px);
-  border: 2px solid var(--line);
+  border: 2px solid #e7dfff;
   border-radius: 22px;
-  background: linear-gradient(160deg, #fff9ef, #fff5e4);
-  box-shadow: 0 16px 40px rgba(80, 66, 42, 0.08);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(247, 242, 255, 0.96)),
+    linear-gradient(120deg, rgba(255, 143, 213, 0.14), rgba(105, 231, 255, 0.18));
+  box-shadow: 0 18px 44px rgba(111, 91, 255, 0.16);
   transform: translateY(10px);
   opacity: 0;
   animation: reveal 540ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
@@ -57,7 +64,7 @@ body {
   margin: 0;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #136d5d;
+  color: #8a3fd9;
   font-weight: 700;
   font-size: 0.78rem;
 }
@@ -69,7 +76,7 @@ h1 {
   line-height: 1.05;
   letter-spacing: -0.03em;
   text-transform: uppercase;
-  background: linear-gradient(135deg, #111 5%, #0f7f6c 42%, #f47e4f 100%);
+  background: linear-gradient(130deg, #6f5bff 10%, #ff67b3 52%, #69e7ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -77,7 +84,7 @@ h1 {
 
 .lead {
   margin: 0;
-  color: var(--muted);
+  color: #5f4d79;
   max-width: 65ch;
   font-size: clamp(0.98rem, 2vw, 1.12rem);
 }
@@ -113,8 +120,9 @@ main {
   border: 1.5px solid var(--line);
   border-radius: 18px;
   padding: 16px;
-  background: var(--paper);
-  box-shadow: 0 10px 24px rgba(50, 40, 28, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 244, 255, 0.98));
+  box-shadow: 0 12px 30px rgba(113, 86, 173, 0.14);
   display: grid;
   gap: 10px;
   transform: translateY(12px);
@@ -141,8 +149,8 @@ main {
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: linear-gradient(140deg, var(--accent), #5ecfb7);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: linear-gradient(130deg, var(--u-violet), var(--u-pink), var(--u-cyan));
+  box-shadow: 0 0 0 3px #efe8ff;
 }
 
 .tool-card h3 {
@@ -152,7 +160,7 @@ main {
 
 .desc {
   margin: 0;
-  color: var(--muted);
+  color: #614f7a;
   font-size: 0.94rem;
 }
 
@@ -164,10 +172,10 @@ main {
 
 .tag {
   font-size: 0.76rem;
-  border: 1px solid #d6cfbf;
+  border: 1px solid #dbcff9;
   border-radius: 999px;
   padding: 2px 9px;
-  background: #fffef7;
+  background: #faf7ff;
 }
 
 .launch {
@@ -182,7 +190,7 @@ main {
   border-radius: 12px;
   min-height: 40px;
   padding: 0 14px;
-  background: linear-gradient(135deg, var(--accent), #0f6f5e);
+  background: linear-gradient(135deg, #6f5bff, #ff67b3 60%, #69e7ff);
   transition: transform 160ms ease, filter 160ms ease;
 }
 
@@ -192,7 +200,7 @@ main {
 }
 
 .launch.soon {
-  background: linear-gradient(135deg, #9a8f80, #7a6e60);
+  background: linear-gradient(135deg, #998bb8, #7e71a4);
   pointer-events: none;
   opacity: 0.9;
 }
@@ -203,7 +211,7 @@ main {
   padding: 8px 2px;
   display: flex;
   justify-content: space-between;
-  color: #5f5a52;
+  color: #665580;
   font-size: 0.85rem;
 }
 
