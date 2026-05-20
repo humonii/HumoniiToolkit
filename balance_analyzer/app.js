@@ -72,12 +72,7 @@ const dom = {
   timeseriesPlot: document.getElementById("timeseries-plot"),
   compareTotalPathPlot: document.getElementById("compare-total-path-plot"),
   compareEllipsePlot: document.getElementById("compare-ellipse-plot"),
-  exportMetrics: document.getElementById("export-metrics"),
-  exportMetricsTxt: document.getElementById("export-metrics-txt"),
-  exportJson: document.getElementById("export-json"),
-  exportTrajectoryPng: document.getElementById("export-trajectory-png"),
-  exportTimeseriesPng: document.getElementById("export-timeseries-png"),
-  exportComparePng: document.getElementById("export-compare-png"),
+  exportPdf: document.getElementById("export-pdf"),
 };
 
 init();
@@ -98,12 +93,7 @@ function init() {
     }
   });
 
-  dom.exportMetrics.addEventListener("click", () => exportMetricsCsv());
-  dom.exportMetricsTxt.addEventListener("click", () => exportVisibleMetricsTxt());
-  dom.exportJson.addEventListener("click", () => exportAnalysisJson());
-  dom.exportTrajectoryPng.addEventListener("click", () => exportPlotPng(dom.trajectoryPlot, "cop_trajectory.png"));
-  dom.exportTimeseriesPng.addEventListener("click", () => exportPlotPng(dom.timeseriesPlot, "time_series.png"));
-  dom.exportComparePng.addEventListener("click", () => exportComparisonPngs());
+  dom.exportPdf.addEventListener("click", () => exportPdf());
 
   renderAll();
   loadPyodideRuntime();
@@ -267,7 +257,12 @@ function renderAll() {
   renderTrajectoryPlot();
   renderTimeSeriesPlot();
   renderComparisonPlot();
-  updateExportAvailability();
+  updatePdfExportAvailability();
+}
+
+function updatePdfExportAvailability() {
+  const hasVisibleTrials = state.trials.some((trial) => trial.visible);
+  dom.exportPdf.disabled = !hasVisibleTrials;
 }
 
 function renderFileList() {
@@ -394,6 +389,7 @@ function renderTrajectoryPlot() {
       x: [points[0].x],
       y: [points[0].y],
       text: ["Start"],
+      textfont: { size: 36 },
       textposition: "top center",
       marker: { size: 10, symbol: "circle", color: "#147565" },
       hoverinfo: "skip",
@@ -406,6 +402,7 @@ function renderTrajectoryPlot() {
       x: [points[points.length - 1].x],
       y: [points[points.length - 1].y],
       text: ["End"],
+      textfont: { size: 36 },
       textposition: "bottom center",
       marker: { size: 10, symbol: "diamond", color: "#e6844a" },
       hoverinfo: "skip",
@@ -414,14 +411,15 @@ function renderTrajectoryPlot() {
   });
 
   const layout = {
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "#fefcf6",
+    paper_bgcolor: "#ffffff",
+    plot_bgcolor: "#ffffff",
     margin: { t: 20, r: 20, b: 60, l: 60 },
     dragmode: "pan",
     autosize: true,
-    xaxis: { title: "X (mm)", zeroline: true, constrain: "domain" },
-    yaxis: { title: "Y (mm)", scaleanchor: "x", scaleratio: 1, zeroline: true, constrain: "domain" },
-    legend: { orientation: "h" },
+    font: { size: 40 },
+    xaxis: { title: { text: "X (mm)", font: { size: 48 } }, tickfont: { size: 40 }, zeroline: true, constrain: "domain" },
+    yaxis: { title: { text: "Y (mm)", font: { size: 48 } }, tickfont: { size: 40 }, scaleanchor: "x", scaleratio: 1, zeroline: true, constrain: "domain" },
+    legend: { orientation: "h", font: { size: 40 } },
   };
   Plotly.react(dom.trajectoryPlot, traces, layout, PLOT_CONFIG);
 }
@@ -473,18 +471,19 @@ function renderTimeSeriesPlot() {
   }
 
   const layout = {
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "#fefcf6",
+    paper_bgcolor: "#ffffff",
+    plot_bgcolor: "#ffffff",
     grid: { rows: 3, columns: 1, pattern: "independent" },
     margin: { t: 20, r: 20, b: 45, l: 55 },
     dragmode: "pan",
-    legend: { orientation: "h" },
-    xaxis: { title: "Time (s)" },
-    yaxis: { title: "X (mm)" },
-    xaxis2: { title: "Time (s)" },
-    yaxis2: { title: "Y (mm)" },
-    xaxis3: { title: "Time (s)" },
-    yaxis3: { title: "Velocity (mm/s)" },
+    font: { size: 38 },
+    legend: { orientation: "h", font: { size: 36 } },
+    xaxis: { title: { text: "Time (s)", font: { size: 44 } }, tickfont: { size: 36 } },
+    yaxis: { title: { text: "X (mm)", font: { size: 44 } }, tickfont: { size: 36 } },
+    xaxis2: { title: { text: "Time (s)", font: { size: 44 } }, tickfont: { size: 36 } },
+    yaxis2: { title: { text: "Y (mm)", font: { size: 44 } }, tickfont: { size: 36 } },
+    xaxis3: { title: { text: "Time (s)", font: { size: 44 } }, tickfont: { size: 36 } },
+    yaxis3: { title: { text: "Velocity (mm/s)", font: { size: 44 } }, tickfont: { size: 36 } },
   };
   Plotly.react(dom.timeseriesPlot, traces, layout, PLOT_CONFIG);
 }
@@ -525,39 +524,22 @@ function renderSingleComparisonPlot(element, visibleTrials, fileIndexes, labels,
   }];
 
   Plotly.react(element, traces, {
-    title: { text: label, font: { size: 15 } },
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "#fefcf6",
+    title: { text: label, font: { size: 52 } },
+    paper_bgcolor: "#ffffff",
+    plot_bgcolor: "#ffffff",
     margin: { t: 44, r: 20, b: 80, l: 55 },
+    font: { size: 38 },
     dragmode: "pan",
     showlegend: false,
     xaxis: {
-      title: "file index",
+      title: { text: "file index", font: { size: 44 } },
+      tickfont: { size: 36 },
       tickmode: "array",
       tickvals: fileIndexes,
       ticktext: fileIndexes.map(String),
     },
-    yaxis: { title: label },
+    yaxis: { title: { text: label, font: { size: 44 } }, tickfont: { size: 36 } },
   }, PLOT_CONFIG);
-}
-
-function updateExportAvailability() {
-  const hasTrials = state.trials.length > 0;
-  const hasVisibleTrials = state.trials.some((trial) => trial.visible);
-  for (const button of [
-    dom.exportMetrics,
-    dom.exportMetricsTxt,
-    dom.exportJson,
-    dom.exportTrajectoryPng,
-    dom.exportTimeseriesPng,
-    dom.exportComparePng,
-  ]) {
-    button.disabled = !hasVisibleTrials;
-  }
-
-  if (!hasTrials) {
-    dom.exportJson.disabled = true;
-  }
 }
 
 function buildLegendLabel(trial) {
@@ -585,159 +567,6 @@ function computeVelocitySeries(points) {
     velocities.push({ time: curr.time, velocity: distance / dt });
   }
   return velocities;
-}
-
-function exportMetricsCsv() {
-  const activeTrials = state.trials.filter((trial) => trial.visible);
-  const headers = ["file", "subject", "condition", "trial", ...METRIC_DEFS.map(([key]) => key)];
-  const rows = activeTrials.map((trial) => {
-    const metrics = computeMetricsForTrial(trial);
-    return [
-      trial.fileName,
-      trial.subject,
-      trial.condition,
-      trial.trialLabel,
-      ...METRIC_DEFS.map(([key]) => formatMetricValue(metrics[key])),
-    ];
-  });
-  downloadText("balance_metrics.csv", toCsvString(headers, rows), "text/csv;charset=utf-8");
-}
-
-function exportVisibleMetricsTxt() {
-  const activeTrials = state.trials.filter((trial) => trial.visible);
-  for (const trial of activeTrials) {
-    downloadText(metricsTxtFilename(trial.fileName), formatTrialMetricsTxt(trial), "text/plain;charset=utf-8");
-  }
-}
-
-function metricsTxtFilename(csvFilename) {
-  const dotIndex = csvFilename.lastIndexOf(".");
-  const stem = dotIndex > 0 ? csvFilename.slice(0, dotIndex) : csvFilename;
-  return `${stem}_metrics.txt`;
-}
-
-function formatTrialMetricsTxt(trial) {
-  const lines = [
-    "source_file",
-    `  ${trial.fileName}`,
-    "",
-  ];
-
-  appendKeyValueSection(lines, "metadata", trial.analysis.metadata || {});
-  appendMetricsWithUnitsSection(
-    lines,
-    "builtin_metrics",
-    trial.analysis.builtin_metrics || {},
-    trial.analysis.builtin_metric_units || {},
-  );
-  appendKeyValueSection(lines, "cop_metrics", computeMetricsForTrial(trial));
-
-  if (trial.analysis.com_metrics) {
-    appendKeyValueSection(lines, "com_metrics", trial.analysis.com_metrics);
-  }
-
-  return `${lines.join("\n").trimEnd()}\n`;
-}
-
-function appendKeyValueSection(lines, title, values) {
-  const entries = Object.entries(values);
-  if (entries.length === 0) {
-    return;
-  }
-
-  lines.push(title);
-  for (const [key, value] of entries) {
-    lines.push(`  ${key}: ${formatTxtValue(value)}`);
-  }
-  lines.push("");
-}
-
-function appendMetricsWithUnitsSection(lines, title, values, units) {
-  const entries = Object.entries(values);
-  if (entries.length === 0) {
-    return;
-  }
-
-  lines.push(title);
-  for (const [key, value] of entries) {
-    const unit = units[key] ? ` ${units[key]}` : "";
-    lines.push(`  ${key}: ${formatTxtValue(value)}${unit}`);
-  }
-  lines.push("");
-}
-
-function formatTxtValue(value) {
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      return "nan";
-    }
-    return Number.parseFloat(value.toPrecision(10)).toString();
-  }
-  return String(value);
-}
-
-function exportAnalysisJson() {
-  const result = {
-    trajectory_mode: "cop",
-    comparison_metric_keys: COMPARISON_METRIC_DEFS.map(([key]) => key),
-    generated_at: new Date().toISOString(),
-    trials: state.trials.filter((trial) => trial.visible).map((trial) => ({
-      file: trial.fileName,
-      subject: trial.subject,
-      condition: trial.condition,
-      trial: trial.trialLabel,
-      memo: trial.memo,
-      visible: trial.visible,
-      active_mapping: resolveActiveMapping(trial),
-      metrics: computeMetricsForTrial(trial),
-      analysis_source: trial.analysisSource,
-      result: trial.analysis,
-    })),
-  };
-  downloadText("balance_analysis_result.json", `${JSON.stringify(result, null, 2)}\n`, "application/json;charset=utf-8");
-}
-
-function exportPlotPng(element, filename) {
-  if (!element || !window.Plotly || !state.trials.some((trial) => trial.visible)) {
-    return;
-  }
-  Plotly.downloadImage(element, {
-    format: "png",
-    filename: filename.replace(/\.png$/, ""),
-    width: 1280,
-    height: 720,
-    scale: 2,
-  });
-}
-
-function exportComparisonPngs() {
-  exportPlotPng(dom.compareTotalPathPlot, "total_path_length_comparison.png");
-  exportPlotPng(dom.compareEllipsePlot, "ellipse_area_95_comparison.png");
-}
-
-function downloadText(filename, text, type) {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-function toCsvString(headers, rows) {
-  const allRows = [headers, ...rows];
-  return allRows.map((row) => row.map(csvEscape).join(",")).join("\n");
-}
-
-function csvEscape(value) {
-  const text = value == null ? "" : String(value);
-  if (/[",\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
 }
 
 function setStatus(message) {
@@ -1174,4 +1003,317 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
   return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+async function exportPdf() {
+  const hasVisibleTrials = state.trials.some((trial) => trial.visible);
+  if (!hasVisibleTrials) {
+    alert("表示されているデータがありません。");
+    return;
+  }
+
+  dom.exportPdf.disabled = true;
+  setStatus("PDF生成中...");
+
+  try {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      throw new Error("PDFライブラリの読み込みに失敗しました。ページを再読み込みしてください。");
+    }
+
+    const canvas = await buildPdfCanvas();
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 8;
+    const maxWidth = pageWidth - (margin * 2);
+    const maxHeight = pageHeight - (margin * 2);
+
+    let renderWidth = maxWidth;
+    let renderHeight = (canvas.height * renderWidth) / canvas.width;
+    if (renderHeight > maxHeight) {
+      renderHeight = maxHeight;
+      renderWidth = (canvas.width * renderHeight) / canvas.height;
+    }
+
+    const offsetX = (pageWidth - renderWidth) / 2;
+    const offsetY = (pageHeight - renderHeight) / 2;
+    const dataUrl = canvas.toDataURL("image/png");
+    pdf.addImage(dataUrl, "PNG", offsetX, offsetY, renderWidth, renderHeight);
+    pdf.save(`balance_analysis_${new Date().toISOString().split("T")[0]}.pdf`);
+
+    setStatus("PDFエクスポート完了しました。A4一枚に自動調整しました。");
+  } catch (error) {
+    console.error("PDF export error:", error);
+    setStatus(`PDFエクスポートに失敗しました: ${error.message}`);
+    alert(`エラー: ${error.message}`);
+  } finally {
+    dom.exportPdf.disabled = false;
+  }
+}
+
+async function buildPdfCanvas() {
+  const canvas = document.createElement("canvas");
+  const width = 3200;
+  const height = 18000;
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+
+  const margin = 72;
+  const innerWidth = width - (margin * 2);
+  let y = margin;
+
+  context.fillStyle = "#111111";
+  context.font = "bold 64px Arial";
+  context.fillText("Balance Analyzer 解析結果", margin, y);
+  y += 36;
+  context.strokeStyle = "#d9d9d9";
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(margin, y + 8);
+  context.lineTo(width - margin, y + 8);
+  context.stroke();
+  y += 58;
+
+  context.font = "28px Arial";
+  context.fillStyle = "#333333";
+  context.fillText(`生成日時: ${new Date().toLocaleString("ja-JP")}`, margin, y);
+  y += 56;
+
+  const visibleTrials = state.trials.filter((trial) => trial.visible);
+  context.font = "bold 42px Arial";
+  context.fillStyle = "#111111";
+  context.fillText("読み込みファイル", margin, y);
+  y += 54;
+  context.font = "28px Arial";
+  for (const trial of visibleTrials) {
+    const text = `・${trial.fileName} (${trial.condition || trial.subject || "N/A"})`;
+    context.fillText(text, margin + 8, y);
+    y += 40;
+  }
+  y += 20;
+
+  y = drawMetricsTable(context, margin, y, innerWidth);
+  y += 36;
+
+  y = await drawPlotPairSection(
+    context,
+    "COP軌跡プロット",
+    dom.trajectoryPlot,
+    "時系列プロット",
+    dom.timeseriesPlot,
+    margin,
+    y,
+    innerWidth,
+  );
+  y = await drawPlotPairSection(
+    context,
+    "指標比較プロット: total_path_length",
+    dom.compareTotalPathPlot,
+    "指標比較プロット: ellipse_area_95",
+    dom.compareEllipsePlot,
+    margin,
+    y,
+    innerWidth,
+  );
+
+  const finalHeight = Math.max(y + margin, 1200);
+  const outCanvas = document.createElement("canvas");
+  outCanvas.width = width;
+  outCanvas.height = finalHeight;
+  const outContext = outCanvas.getContext("2d");
+  outContext.imageSmoothingEnabled = true;
+  outContext.imageSmoothingQuality = "high";
+  outContext.fillStyle = "#ffffff";
+  outContext.fillRect(0, 0, outCanvas.width, outCanvas.height);
+  outContext.drawImage(canvas, 0, 0);
+
+  return outCanvas;
+}
+
+function drawMetricsTable(context, x, y, width) {
+  const rows = Array.from(dom.metricsTable.querySelectorAll("tr")).map((row) =>
+    Array.from(row.querySelectorAll("th, td")).map((cell) => cell.textContent.trim())
+  );
+
+  context.fillStyle = "#111111";
+  context.font = "bold 42px Arial";
+  context.fillText("重心動揺指標", x, y);
+  y += 34;
+
+  if (rows.length === 0) {
+    context.font = "28px Arial";
+    context.fillText("(データなし)", x, y + 34);
+    return y + 64;
+  }
+
+  const colCount = Math.max(...rows.map((row) => row.length));
+  const rowHeight = 44;
+  const colWidth = width / colCount;
+  y += 14;
+
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    for (let colIndex = 0; colIndex < colCount; colIndex += 1) {
+      const cellX = x + (colIndex * colWidth);
+      const cellY = y + (rowIndex * rowHeight);
+      const value = (row[colIndex] || "").slice(0, 28);
+
+      context.fillStyle = rowIndex === 0 ? "#f5f5f5" : "#ffffff";
+      context.fillRect(cellX, cellY, colWidth, rowHeight);
+      context.strokeStyle = "#d0d0d0";
+      context.strokeRect(cellX, cellY, colWidth, rowHeight);
+
+      context.fillStyle = "#111111";
+      context.font = rowIndex === 0 ? "bold 18px Arial" : "17px Arial";
+      context.fillText(value, cellX + 8, cellY + 28);
+    }
+  }
+
+  return y + (rows.length * rowHeight);
+}
+
+async function drawPlotSection(context, title, element, x, y, width) {
+  const imageDataUrl = await capturePlotAsImage(element);
+  if (!imageDataUrl) {
+    return y;
+  }
+
+  context.fillStyle = "#111111";
+  context.font = "bold 34px Arial";
+  context.fillText(title, x, y + 34);
+  y += 48;
+
+  const image = await loadImageFromDataUrl(imageDataUrl);
+  const rawWidth = width;
+  const rawHeight = (image.height * rawWidth) / image.width;
+  const maxPlotHeight = 1100;
+  const sectionScale = rawHeight > maxPlotHeight ? maxPlotHeight / rawHeight : 1;
+  const drawWidth = rawWidth * sectionScale;
+  const drawHeight = rawHeight * sectionScale;
+  const drawX = x + ((width - drawWidth) / 2);
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(drawX, y, drawWidth, drawHeight);
+  context.strokeStyle = "#d8d8d8";
+  context.strokeRect(drawX, y, drawWidth, drawHeight);
+  context.drawImage(image, drawX, y, drawWidth, drawHeight);
+
+  return y + drawHeight + 36;
+}
+
+async function drawPlotPairSection(context, leftTitle, leftElement, rightTitle, rightElement, x, y, width) {
+  const leftImageDataUrl = await capturePlotAsImage(leftElement);
+  const rightImageDataUrl = await capturePlotAsImage(rightElement);
+  if (!leftImageDataUrl && !rightImageDataUrl) {
+    return y;
+  }
+
+  const gap = 24;
+  const cellWidth = (width - gap) / 2;
+  const leftX = x;
+  const rightX = x + cellWidth + gap;
+
+  context.fillStyle = "#111111";
+  context.font = "bold 28px Arial";
+  context.fillText(leftTitle, leftX, y + 30);
+  context.fillText(rightTitle, rightX, y + 30);
+  y += 44;
+
+  const leftImage = leftImageDataUrl ? await loadImageFromDataUrl(leftImageDataUrl) : null;
+  const rightImage = rightImageDataUrl ? await loadImageFromDataUrl(rightImageDataUrl) : null;
+
+  const maxCellHeight = 840;
+  const leftRawHeight = leftImage ? (leftImage.height * cellWidth) / leftImage.width : 0;
+  const rightRawHeight = rightImage ? (rightImage.height * cellWidth) / rightImage.width : 0;
+  const rawPairHeight = Math.max(leftRawHeight, rightRawHeight, 1);
+  const pairScale = rawPairHeight > maxCellHeight ? maxCellHeight / rawPairHeight : 1;
+  const leftHeight = leftRawHeight * pairScale;
+  const rightHeight = rightRawHeight * pairScale;
+  const rowHeight = Math.max(leftHeight, rightHeight, 300);
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(leftX, y, cellWidth, rowHeight);
+  context.fillRect(rightX, y, cellWidth, rowHeight);
+  context.strokeStyle = "#d8d8d8";
+  context.strokeRect(leftX, y, cellWidth, rowHeight);
+  context.strokeRect(rightX, y, cellWidth, rowHeight);
+
+  if (leftImage) {
+    const drawWidth = cellWidth;
+    const drawHeight = leftHeight;
+    const drawY = y + ((rowHeight - drawHeight) / 2);
+    context.drawImage(leftImage, leftX, drawY, drawWidth, drawHeight);
+  }
+
+  if (rightImage) {
+    const drawWidth = cellWidth;
+    const drawHeight = rightHeight;
+    const drawY = y + ((rowHeight - drawHeight) / 2);
+    context.drawImage(rightImage, rightX, drawY, drawWidth, drawHeight);
+  }
+
+  return y + rowHeight + 38;
+}
+
+function capturePlotAsImage(plotElement) {
+  return new Promise((resolve) => {
+    if (!plotElement || !window.Plotly) {
+      resolve(null);
+      return;
+    }
+
+    try {
+      const sourceWidth = Math.max(600, Math.floor(plotElement.clientWidth || 1000));
+      const sourceHeight = Math.max(320, Math.floor(plotElement.clientHeight || 560));
+      const aspect = sourceHeight / sourceWidth;
+      const width = Math.max(3800, sourceWidth * 3);
+      const height = Math.round(width * aspect);
+      Plotly.toImage(plotElement, { format: "png", width, height, scale: 1 })
+        .then((dataUrl) => fillTransparentBackgroundWithWhite(dataUrl))
+        .then((jpgDataUrl) => {
+          resolve(jpgDataUrl);
+        })
+        .catch((error) => {
+          console.warn("Plotly toImage failed:", error);
+          resolve(null);
+        });
+    } catch (error) {
+      console.error("Error capturing plot:", error);
+      resolve(null);
+    }
+  });
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("画像の読み込みに失敗しました。"));
+    image.src = dataUrl;
+  });
+}
+
+function fillTransparentBackgroundWithWhite(imageDataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    image.onerror = () => reject(new Error("プロット画像の生成に失敗しました。"));
+    image.src = imageDataUrl;
+  });
 }

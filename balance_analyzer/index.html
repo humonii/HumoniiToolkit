@@ -11,7 +11,8 @@
   <link rel="stylesheet" href="./style.css" />
   <script defer src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
-  <script type="module" defer src="./app.js?v=20260520-compare-fixed"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script type="module" defer src="./app.js?v=20260520-pdf-hq-font2x"></script>
 </head>
 <body>
   <div class="topbar">
@@ -44,21 +45,13 @@
           <p id="runtime-status" class="hint runtime-text">Python runtime loading...</p>
           <p id="error-banner" class="error-banner" hidden></p>
         </div>
-
-        <div class="divider"></div>
-
-        <h2>エクスポート</h2>
-        <p class="hint">現在読み込み中の解析結果を CSV / JSON / PNG として保存できます。</p>
-
-        <div class="button-stack compact">
-          <button id="export-metrics" type="button">指標CSVを書き出す</button>
-          <button id="export-json" type="button">解析JSONを書き出す</button>
-          <button id="export-timeseries-png" type="button">時系列PNG</button>
-          <button id="export-compare-png" type="button">比較PNG（2枚）</button>
-        </div>
       </aside>
 
       <section class="content-stack">
+        <div style="display: flex; gap: 8px; margin-bottom: 16px; justify-content: flex-end;">
+          <button id="export-pdf" type="button" title="解析結果をA4 PDFで出力">📄 PDFに出力</button>
+        </div>
+
         <section class="panel">
           <div class="section-headline">
             <h2>読み込みファイル</h2>

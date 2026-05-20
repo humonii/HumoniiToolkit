@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Export Test</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .test-content {
+      background: white;
+      color: black;
+      padding: 20px;
+      border: 1px solid black;
+      width: 210mm;
+      margin: 0 auto;
+    }
+    h1 {
+      color: black;
+      text-align: center;
+    }
+    p {
+      color: black;
+      font-size: 14px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>PDF Export Test</h2>
+  <button onclick="testPdf()">Test PDF Export</button>
+
+  <div id="test-content" class="test-content">
+    <h1>テストPDF</h1>
+    <p>これはPDF出力のテストです。</p>
+    <p>生成時刻: <span id="timestamp"></span></p>
+    <p>このテキストがPDFに正しく表示されていれば、ライブラリは正常に動作しています。</p>
+  </div>
+
+  <script>
+    document.getElementById("timestamp").textContent = new Date().toLocaleString("ja-JP");
+
+    function testPdf() {
+      console.log("Starting PDF test...");
+
+      if (!window.jspdf || !window.jspdf.jsPDF) {
+        console.error("jsPDF not loaded");
+        alert("jsPDF ライブラリが読み込まれていません");
+        return;
+      }
+
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1200;
+        canvas.height = 900;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#111111";
+        ctx.font = "bold 64px Arial";
+        ctx.fillText("テストPDF", 80, 110);
+        ctx.strokeStyle = "#dddddd";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(80, 140);
+        ctx.lineTo(1120, 140);
+        ctx.stroke();
+
+        ctx.font = "34px Arial";
+        ctx.fillText("これはPDF出力のテストです。", 80, 220);
+        ctx.fillText(`生成時刻: ${new Date().toLocaleString("ja-JP")}`, 80, 280);
+        ctx.fillText("この文字が見えていれば白紙問題は解消されています。", 80, 340);
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 8;
+        const maxW = pageW - (margin * 2);
+        const maxH = pageH - (margin * 2);
+
+        let w = maxW;
+        let h = (canvas.height * w) / canvas.width;
+        if (h > maxH) {
+          h = maxH;
+          w = (canvas.width * h) / canvas.height;
+        }
+
+        const x = (pageW - w) / 2;
+        const y = (pageH - h) / 2;
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", x, y, w, h, undefined, "FAST");
+        pdf.save("test.pdf");
+
+        console.log("PDF saved successfully");
+        alert("PDF生成成功！");
+      } catch (error) {
+        console.error("Error:", error);
+        alert(`エラー: ${error.message}`);
+      }
+    }
+  </script>
+</body>
+</html>
