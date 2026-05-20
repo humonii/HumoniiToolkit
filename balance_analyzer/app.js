@@ -49,6 +49,158 @@ const state = {
   pyodide: null,
 };
 
+const PRINT_STYLES = `
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: #111111;
+  }
+
+  body {
+    font-family: "Space Grotesk", "Hiragino Kaku Gothic ProN", sans-serif;
+  }
+
+  #print-root {
+    width: 100%;
+  }
+
+  .print-page {
+    width: 194mm;
+    min-height: 281mm;
+    margin: 0 auto;
+    background: #ffffff;
+    color: #111111;
+    box-sizing: border-box;
+    font-family: "Space Grotesk", "Hiragino Kaku Gothic ProN", sans-serif;
+  }
+
+  .print-header {
+    border-bottom: 0.5mm solid #d9d9d9;
+    padding-bottom: 2mm;
+    margin-bottom: 2mm;
+  }
+
+  .print-title {
+    margin: 0;
+    font-family: "Syne", "Hiragino Kaku Gothic ProN", sans-serif;
+    font-size: 16pt;
+    font-weight: 700;
+  }
+
+  .print-meta {
+    margin: 1mm 0 0;
+    font-size: 8.8pt;
+    color: #333333;
+  }
+
+  .print-section-title {
+    margin: 0 0 1.2mm;
+    font-size: 10pt;
+    font-weight: 700;
+  }
+
+  .print-top-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2mm;
+    margin-bottom: 2.2mm;
+  }
+
+  .print-file-list {
+    margin: 0;
+    padding-left: 4.5mm;
+    font-size: 8.2pt;
+  }
+
+  .print-file-list li {
+    margin: 0.4mm 0;
+    line-height: 1.25;
+  }
+
+  .print-table-wrap {
+    border: 0.3mm solid #dedede;
+    border-radius: 1mm;
+    overflow: hidden;
+  }
+
+  .print-metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 6.8pt;
+  }
+
+  .print-metrics-table th,
+  .print-metrics-table td {
+    border: 0.2mm solid #ececec;
+    padding: 0.7mm 1.1mm;
+    text-align: left;
+    vertical-align: top;
+    word-break: break-word;
+  }
+
+  .print-metrics-table th {
+    background: #fafafa;
+    font-weight: 700;
+  }
+
+  .print-plot-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.2mm;
+  }
+
+  .print-plot-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.2mm;
+  }
+
+  .print-plot-card {
+    border: 0.3mm solid #d8d8d8;
+    border-radius: 1mm;
+    padding: 1.2mm;
+    background: #ffffff;
+    min-height: 84mm;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 1mm;
+  }
+
+  .print-plot-caption {
+    margin: 0;
+    font-size: 8pt;
+    font-weight: 700;
+    color: #222222;
+  }
+
+  .print-plot-body {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+
+  .print-plot-body svg,
+  .print-plot-body img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 78mm;
+    object-fit: contain;
+  }
+
+  .print-empty {
+    font-size: 8pt;
+    color: #666666;
+  }
+`;
+
 const PLOT_CONFIG = {
   responsive: true,
   displaylogo: false,
@@ -73,7 +225,10 @@ const dom = {
   compareTotalPathPlot: document.getElementById("compare-total-path-plot"),
   compareEllipsePlot: document.getElementById("compare-ellipse-plot"),
   exportPdf: document.getElementById("export-pdf"),
+  printRoot: document.getElementById("print-root"),
 };
+
+let isPrintHookInstalled = false;
 
 init();
 
@@ -364,12 +519,19 @@ function renderTrajectoryPlot() {
 
   const traces = [];
   const visibleTrials = state.trials.filter((item) => item.visible);
+  let allXValues = [];
+  let allYValues = [];
+
   visibleTrials.forEach((trial, index) => {
     const mapping = resolveActiveMapping(trial);
     const points = collectValidPoints(trial.analysis.data, mapping.time, mapping.x, mapping.y);
     if (points.length === 0) {
       return;
     }
+    
+    allXValues.push(...points.map((p) => p.x));
+    allYValues.push(...points.map((p) => p.y));
+    
     const label = `file_${index + 1}`;
     traces.push({
       type: "scatter",
@@ -389,7 +551,7 @@ function renderTrajectoryPlot() {
       x: [points[0].x],
       y: [points[0].y],
       text: ["Start"],
-      textfont: { size: 36 },
+      textfont: { size: 12 },
       textposition: "top center",
       marker: { size: 10, symbol: "circle", color: "#147565" },
       hoverinfo: "skip",
@@ -402,7 +564,7 @@ function renderTrajectoryPlot() {
       x: [points[points.length - 1].x],
       y: [points[points.length - 1].y],
       text: ["End"],
-      textfont: { size: 36 },
+      textfont: { size: 12 },
       textposition: "bottom center",
       marker: { size: 10, symbol: "diamond", color: "#e6844a" },
       hoverinfo: "skip",
@@ -410,16 +572,36 @@ function renderTrajectoryPlot() {
     });
   });
 
+  let xRange = [0, 1];
+  let yRange = [0, 1];
+  if (allXValues.length > 0 && allYValues.length > 0) {
+    const minX = Math.min(...allXValues);
+    const maxX = Math.max(...allXValues);
+    const minY = Math.min(...allYValues);
+    const maxY = Math.max(...allYValues);
+    
+    const rangeX = maxX - minX;
+    const rangeY = maxY - minY;
+    const maxRange = Math.max(rangeX, rangeY);
+    
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const padding = maxRange * 0.1;
+    
+    xRange = [centerX - (maxRange + padding * 2) / 2, centerX + (maxRange + padding * 2) / 2];
+    yRange = [centerY - (maxRange + padding * 2) / 2, centerY + (maxRange + padding * 2) / 2];
+  }
+
   const layout = {
     paper_bgcolor: "#ffffff",
     plot_bgcolor: "#ffffff",
     margin: { t: 20, r: 20, b: 60, l: 60 },
     dragmode: "pan",
     autosize: true,
-    font: { size: 40 },
-    xaxis: { title: { text: "X (mm)", font: { size: 48 } }, tickfont: { size: 40 }, zeroline: true, constrain: "domain" },
-    yaxis: { title: { text: "Y (mm)", font: { size: 48 } }, tickfont: { size: 40 }, scaleanchor: "x", scaleratio: 1, zeroline: true, constrain: "domain" },
-    legend: { orientation: "h", font: { size: 40 } },
+    font: { size: 12 },
+    xaxis: { title: { text: "X (mm)", font: { size: 14 } }, tickfont: { size: 11 }, zeroline: true, constrain: "domain", range: xRange },
+    yaxis: { title: { text: "Y (mm)", font: { size: 14 } }, tickfont: { size: 11 }, scaleanchor: "x", scaleratio: 1, zeroline: true, constrain: "domain", range: yRange },
+    legend: { orientation: "h", font: { size: 11 } },
   };
   Plotly.react(dom.trajectoryPlot, traces, layout, PLOT_CONFIG);
 }
@@ -476,14 +658,14 @@ function renderTimeSeriesPlot() {
     grid: { rows: 3, columns: 1, pattern: "independent" },
     margin: { t: 20, r: 20, b: 45, l: 55 },
     dragmode: "pan",
-    font: { size: 38 },
-    legend: { orientation: "h", font: { size: 36 } },
-    xaxis: { title: { text: "Time (s)", font: { size: 44 } }, tickfont: { size: 36 } },
-    yaxis: { title: { text: "X (mm)", font: { size: 44 } }, tickfont: { size: 36 } },
-    xaxis2: { title: { text: "Time (s)", font: { size: 44 } }, tickfont: { size: 36 } },
-    yaxis2: { title: { text: "Y (mm)", font: { size: 44 } }, tickfont: { size: 36 } },
-    xaxis3: { title: { text: "Time (s)", font: { size: 44 } }, tickfont: { size: 36 } },
-    yaxis3: { title: { text: "Velocity (mm/s)", font: { size: 44 } }, tickfont: { size: 36 } },
+    font: { size: 11 },
+    legend: { orientation: "h", font: { size: 10 } },
+    xaxis: { title: { text: "Time (s)", font: { size: 13 } }, tickfont: { size: 10 } },
+    yaxis: { title: { text: "X (mm)", font: { size: 13 } }, tickfont: { size: 10 } },
+    xaxis2: { title: { text: "Time (s)", font: { size: 13 } }, tickfont: { size: 10 } },
+    yaxis2: { title: { text: "Y (mm)", font: { size: 13 } }, tickfont: { size: 10 } },
+    xaxis3: { title: { text: "Time (s)", font: { size: 13 } }, tickfont: { size: 10 } },
+    yaxis3: { title: { text: "Velocity (mm/s)", font: { size: 13 } }, tickfont: { size: 10 } },
   };
   Plotly.react(dom.timeseriesPlot, traces, layout, PLOT_CONFIG);
 }
@@ -524,21 +706,21 @@ function renderSingleComparisonPlot(element, visibleTrials, fileIndexes, labels,
   }];
 
   Plotly.react(element, traces, {
-    title: { text: label, font: { size: 52 } },
+    title: { text: label, font: { size: 14 } },
     paper_bgcolor: "#ffffff",
     plot_bgcolor: "#ffffff",
     margin: { t: 44, r: 20, b: 80, l: 55 },
-    font: { size: 38 },
+    font: { size: 11 },
     dragmode: "pan",
     showlegend: false,
     xaxis: {
-      title: { text: "file index", font: { size: 44 } },
-      tickfont: { size: 36 },
+      title: { text: "file index", font: { size: 12 } },
+      tickfont: { size: 10 },
       tickmode: "array",
       tickvals: fileIndexes,
       ticktext: fileIndexes.map(String),
     },
-    yaxis: { title: { text: label, font: { size: 44 } }, tickfont: { size: 36 } },
+    yaxis: { title: { text: label, font: { size: 12 } }, tickfont: { size: 10 } },
   }, PLOT_CONFIG);
 }
 
@@ -1013,256 +1195,207 @@ async function exportPdf() {
   }
 
   dom.exportPdf.disabled = true;
-  setStatus("PDF生成中...");
+  setStatus("印刷用レイアウトを生成中...");
 
   try {
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-      throw new Error("PDFライブラリの読み込みに失敗しました。ページを再読み込みしてください。");
-    }
-
-    const canvas = await buildPdfCanvas();
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 8;
-    const maxWidth = pageWidth - (margin * 2);
-    const maxHeight = pageHeight - (margin * 2);
-
-    let renderWidth = maxWidth;
-    let renderHeight = (canvas.height * renderWidth) / canvas.width;
-    if (renderHeight > maxHeight) {
-      renderHeight = maxHeight;
-      renderWidth = (canvas.width * renderHeight) / canvas.height;
-    }
-
-    const offsetX = (pageWidth - renderWidth) / 2;
-    const offsetY = (pageHeight - renderHeight) / 2;
-    const dataUrl = canvas.toDataURL("image/png");
-    pdf.addImage(dataUrl, "PNG", offsetX, offsetY, renderWidth, renderHeight);
-    pdf.save(`balance_analysis_${new Date().toISOString().split("T")[0]}.pdf`);
-
-    setStatus("PDFエクスポート完了しました。A4一枚に自動調整しました。");
+    await buildPrintLayout();
+    setStatus("印刷ダイアログを開きます。保存先でPDFを選択してください。");
+    const visibleTrials = state.trials.filter((trial) => trial.visible);
+    const fileNames = visibleTrials.map((trial) => trial.fileName.replace(/\.csv$/i, "")).join("_");
+    const titleText = fileNames || "Balance Analyzer";
+    await printStandaloneDocument(titleText);
   } catch (error) {
     console.error("PDF export error:", error);
-    setStatus(`PDFエクスポートに失敗しました: ${error.message}`);
+    setStatus(`PDF出力に失敗しました: ${error.message}`);
     alert(`エラー: ${error.message}`);
+    cleanupPrintLayout();
   } finally {
     dom.exportPdf.disabled = false;
   }
 }
 
-async function buildPdfCanvas() {
-  const canvas = document.createElement("canvas");
-  const width = 3200;
-  const height = 18000;
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d");
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-
-  const margin = 72;
-  const innerWidth = width - (margin * 2);
-  let y = margin;
-
-  context.fillStyle = "#111111";
-  context.font = "bold 64px Arial";
-  context.fillText("Balance Analyzer 解析結果", margin, y);
-  y += 36;
-  context.strokeStyle = "#d9d9d9";
-  context.lineWidth = 4;
-  context.beginPath();
-  context.moveTo(margin, y + 8);
-  context.lineTo(width - margin, y + 8);
-  context.stroke();
-  y += 58;
-
-  context.font = "28px Arial";
-  context.fillStyle = "#333333";
-  context.fillText(`生成日時: ${new Date().toLocaleString("ja-JP")}`, margin, y);
-  y += 56;
-
-  const visibleTrials = state.trials.filter((trial) => trial.visible);
-  context.font = "bold 42px Arial";
-  context.fillStyle = "#111111";
-  context.fillText("読み込みファイル", margin, y);
-  y += 54;
-  context.font = "28px Arial";
-  for (const trial of visibleTrials) {
-    const text = `・${trial.fileName} (${trial.condition || trial.subject || "N/A"})`;
-    context.fillText(text, margin + 8, y);
-    y += 40;
+async function buildPrintLayout() {
+  if (!dom.printRoot) {
+    throw new Error("印刷コンテナが見つかりません。");
   }
-  y += 20;
 
-  y = drawMetricsTable(context, margin, y, innerWidth);
-  y += 36;
+  dom.printRoot.innerHTML = "";
 
-  y = await drawPlotPairSection(
-    context,
-    "COP軌跡プロット",
-    dom.trajectoryPlot,
-    "時系列プロット",
-    dom.timeseriesPlot,
-    margin,
-    y,
-    innerWidth,
-  );
-  y = await drawPlotPairSection(
-    context,
-    "指標比較プロット: total_path_length",
-    dom.compareTotalPathPlot,
-    "指標比較プロット: ellipse_area_95",
-    dom.compareEllipsePlot,
-    margin,
-    y,
-    innerWidth,
-  );
+  const page = document.createElement("article");
+  page.className = "print-page";
 
-  const finalHeight = Math.max(y + margin, 1200);
-  const outCanvas = document.createElement("canvas");
-  outCanvas.width = width;
-  outCanvas.height = finalHeight;
-  const outContext = outCanvas.getContext("2d");
-  outContext.imageSmoothingEnabled = true;
-  outContext.imageSmoothingQuality = "high";
-  outContext.fillStyle = "#ffffff";
-  outContext.fillRect(0, 0, outCanvas.width, outCanvas.height);
-  outContext.drawImage(canvas, 0, 0);
+  const header = document.createElement("header");
+  header.className = "print-header";
+  header.innerHTML = `
+    <h1 class="print-title">Balance Analyzer 解析結果</h1>
+    <p class="print-meta">生成日時: ${escapeHtml(new Date().toLocaleString("ja-JP"))}</p>
+  `;
+  page.appendChild(header);
 
-  return outCanvas;
+  const topGrid = document.createElement("section");
+  topGrid.className = "print-top-grid";
+
+  const fileBlock = document.createElement("div");
+  fileBlock.innerHTML = "<h2 class=\"print-section-title\">読み込みファイル</h2>";
+  const fileList = document.createElement("ul");
+  fileList.className = "print-file-list";
+  const visibleTrials = state.trials.filter((trial) => trial.visible);
+  for (const trial of visibleTrials) {
+    const item = document.createElement("li");
+    item.textContent = `${trial.fileName} (${trial.condition || trial.subject || "N/A"})`;
+    fileList.appendChild(item);
+  }
+  fileBlock.appendChild(fileList);
+  topGrid.appendChild(fileBlock);
+
+  const metricsBlock = document.createElement("div");
+  metricsBlock.innerHTML = "<h2 class=\"print-section-title\">重心動揺指標</h2>";
+  const metricsWrap = document.createElement("div");
+  metricsWrap.className = "print-table-wrap";
+  const metricsClone = dom.metricsTable.cloneNode(true);
+  metricsClone.className = "print-metrics-table";
+  metricsWrap.appendChild(metricsClone);
+  metricsBlock.appendChild(metricsWrap);
+  topGrid.appendChild(metricsBlock);
+
+  page.appendChild(topGrid);
+
+  const plotGrid = document.createElement("section");
+  plotGrid.className = "print-plot-grid";
+  plotGrid.appendChild(await createPlotPairNode("COP軌跡プロット", dom.trajectoryPlot, "時系列プロット", dom.timeseriesPlot));
+  plotGrid.appendChild(await createPlotPairNode("指標比較: total_path_length", dom.compareTotalPathPlot, "指標比較: ellipse_area_95", dom.compareEllipsePlot));
+  page.appendChild(plotGrid);
+
+  dom.printRoot.appendChild(page);
 }
 
-function drawMetricsTable(context, x, y, width) {
-  const rows = Array.from(dom.metricsTable.querySelectorAll("tr")).map((row) =>
-    Array.from(row.querySelectorAll("th, td")).map((cell) => cell.textContent.trim())
-  );
-
-  context.fillStyle = "#111111";
-  context.font = "bold 42px Arial";
-  context.fillText("重心動揺指標", x, y);
-  y += 34;
-
-  if (rows.length === 0) {
-    context.font = "28px Arial";
-    context.fillText("(データなし)", x, y + 34);
-    return y + 64;
+async function createPlotPairNode(leftTitle, leftElement, rightTitle, rightElement) {
+  const pair = document.createElement("div");
+  pair.className = "print-plot-pair";
+  
+  const leftCard = await createPrintablePlotCard(leftTitle, leftElement);
+  if (leftTitle.includes("COP軌跡")) {
+    leftCard.classList.add("square-plot");
   }
+  pair.appendChild(leftCard);
+  
+  pair.appendChild(await createPrintablePlotCard(rightTitle, rightElement));
+  return pair;
+}
 
-  const colCount = Math.max(...rows.map((row) => row.length));
-  const rowHeight = 44;
-  const colWidth = width / colCount;
-  y += 14;
+async function createPrintablePlotCard(title, plotElement) {
+  const card = document.createElement("article");
+  card.className = "print-plot-card";
+  const caption = document.createElement("h3");
+  caption.className = "print-plot-caption";
+  caption.textContent = title;
+  card.appendChild(caption);
 
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    const row = rows[rowIndex];
-    for (let colIndex = 0; colIndex < colCount; colIndex += 1) {
-      const cellX = x + (colIndex * colWidth);
-      const cellY = y + (rowIndex * rowHeight);
-      const value = (row[colIndex] || "").slice(0, 28);
-
-      context.fillStyle = rowIndex === 0 ? "#f5f5f5" : "#ffffff";
-      context.fillRect(cellX, cellY, colWidth, rowHeight);
-      context.strokeStyle = "#d0d0d0";
-      context.strokeRect(cellX, cellY, colWidth, rowHeight);
-
-      context.fillStyle = "#111111";
-      context.font = rowIndex === 0 ? "bold 18px Arial" : "17px Arial";
-      context.fillText(value, cellX + 8, cellY + 28);
+  const body = document.createElement("div");
+  body.className = "print-plot-body";
+  const svgMarkup = await capturePlotAsSvg(plotElement);
+  if (svgMarkup) {
+    body.innerHTML = svgMarkup;
+    const svgNode = body.querySelector("svg");
+    if (svgNode) {
+      svgNode.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    }
+  } else {
+    const fallback = await capturePlotAsPng(plotElement);
+    if (fallback) {
+      const image = document.createElement("img");
+      image.src = fallback;
+      image.alt = title;
+      body.appendChild(image);
+    } else {
+      const empty = document.createElement("p");
+      empty.className = "print-empty";
+      empty.textContent = "図を取得できませんでした。";
+      body.appendChild(empty);
     }
   }
 
-  return y + (rows.length * rowHeight);
+  card.appendChild(body);
+  return card;
 }
 
-async function drawPlotSection(context, title, element, x, y, width) {
-  const imageDataUrl = await capturePlotAsImage(element);
-  if (!imageDataUrl) {
-    return y;
+function installAfterPrintCleanup() {
+  if (isPrintHookInstalled) {
+    return;
   }
-
-  context.fillStyle = "#111111";
-  context.font = "bold 34px Arial";
-  context.fillText(title, x, y + 34);
-  y += 48;
-
-  const image = await loadImageFromDataUrl(imageDataUrl);
-  const rawWidth = width;
-  const rawHeight = (image.height * rawWidth) / image.width;
-  const maxPlotHeight = 1100;
-  const sectionScale = rawHeight > maxPlotHeight ? maxPlotHeight / rawHeight : 1;
-  const drawWidth = rawWidth * sectionScale;
-  const drawHeight = rawHeight * sectionScale;
-  const drawX = x + ((width - drawWidth) / 2);
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(drawX, y, drawWidth, drawHeight);
-  context.strokeStyle = "#d8d8d8";
-  context.strokeRect(drawX, y, drawWidth, drawHeight);
-  context.drawImage(image, drawX, y, drawWidth, drawHeight);
-
-  return y + drawHeight + 36;
+  isPrintHookInstalled = true;
+  window.addEventListener("afterprint", () => {
+    cleanupPrintLayout();
+    setStatus("PDF出力を完了しました。A4印刷レイアウトで保存されています。");
+  });
 }
 
-async function drawPlotPairSection(context, leftTitle, leftElement, rightTitle, rightElement, x, y, width) {
-  const leftImageDataUrl = await capturePlotAsImage(leftElement);
-  const rightImageDataUrl = await capturePlotAsImage(rightElement);
-  if (!leftImageDataUrl && !rightImageDataUrl) {
-    return y;
+function cleanupPrintLayout() {
+  if (dom.printRoot) {
+    dom.printRoot.innerHTML = "";
   }
-
-  const gap = 24;
-  const cellWidth = (width - gap) / 2;
-  const leftX = x;
-  const rightX = x + cellWidth + gap;
-
-  context.fillStyle = "#111111";
-  context.font = "bold 28px Arial";
-  context.fillText(leftTitle, leftX, y + 30);
-  context.fillText(rightTitle, rightX, y + 30);
-  y += 44;
-
-  const leftImage = leftImageDataUrl ? await loadImageFromDataUrl(leftImageDataUrl) : null;
-  const rightImage = rightImageDataUrl ? await loadImageFromDataUrl(rightImageDataUrl) : null;
-
-  const maxCellHeight = 840;
-  const leftRawHeight = leftImage ? (leftImage.height * cellWidth) / leftImage.width : 0;
-  const rightRawHeight = rightImage ? (rightImage.height * cellWidth) / rightImage.width : 0;
-  const rawPairHeight = Math.max(leftRawHeight, rightRawHeight, 1);
-  const pairScale = rawPairHeight > maxCellHeight ? maxCellHeight / rawPairHeight : 1;
-  const leftHeight = leftRawHeight * pairScale;
-  const rightHeight = rightRawHeight * pairScale;
-  const rowHeight = Math.max(leftHeight, rightHeight, 300);
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(leftX, y, cellWidth, rowHeight);
-  context.fillRect(rightX, y, cellWidth, rowHeight);
-  context.strokeStyle = "#d8d8d8";
-  context.strokeRect(leftX, y, cellWidth, rowHeight);
-  context.strokeRect(rightX, y, cellWidth, rowHeight);
-
-  if (leftImage) {
-    const drawWidth = cellWidth;
-    const drawHeight = leftHeight;
-    const drawY = y + ((rowHeight - drawHeight) / 2);
-    context.drawImage(leftImage, leftX, drawY, drawWidth, drawHeight);
-  }
-
-  if (rightImage) {
-    const drawWidth = cellWidth;
-    const drawHeight = rightHeight;
-    const drawY = y + ((rowHeight - drawHeight) / 2);
-    context.drawImage(rightImage, rightX, drawY, drawWidth, drawHeight);
-  }
-
-  return y + rowHeight + 38;
 }
 
-function capturePlotAsImage(plotElement) {
+function buildStandalonePrintHtml(titleText = "Balance Analyzer") {
+  const printContent = dom.printRoot ? dom.printRoot.innerHTML : "";
+  const pageTitle = escapeHtml(titleText);
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${pageTitle}</title>
+  <style>${PRINT_STYLES}</style>
+</head>
+<body>
+  <section id="print-root">${printContent}</section>
+</body>
+</html>`;
+}
+
+function printStandaloneDocument(titleText = "Balance Analyzer") {
+  return new Promise((resolve, reject) => {
+    const printWindow = window.open("", "_blank", "width=1200,height=1600");
+    if (!printWindow) {
+      reject(new Error("印刷用ウィンドウを開けませんでした。ポップアップを許可してください。"));
+      return;
+    }
+
+    const html = buildStandalonePrintHtml(titleText);
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    const finalize = () => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      const closeAndResolve = () => {
+        try {
+          printWindow.close();
+        } catch (error) {
+          console.warn("Failed to close print window", error);
+        }
+        cleanupPrintLayout();
+        resolve();
+      };
+
+      printWindow.addEventListener("afterprint", closeAndResolve, { once: true });
+      setTimeout(closeAndResolve, 3000);
+    };
+
+    printWindow.addEventListener("load", () => {
+      setTimeout(finalize, 150);
+    }, { once: true });
+  });
+}
+
+function capturePlotAsPng(plotElement) {
   return new Promise((resolve) => {
     if (!plotElement || !window.Plotly) {
       resolve(null);
@@ -1277,8 +1410,8 @@ function capturePlotAsImage(plotElement) {
       const height = Math.round(width * aspect);
       Plotly.toImage(plotElement, { format: "png", width, height, scale: 1 })
         .then((dataUrl) => fillTransparentBackgroundWithWhite(dataUrl))
-        .then((jpgDataUrl) => {
-          resolve(jpgDataUrl);
+        .then((pngDataUrl) => {
+          resolve(pngDataUrl);
         })
         .catch((error) => {
           console.warn("Plotly toImage failed:", error);
@@ -1289,6 +1422,57 @@ function capturePlotAsImage(plotElement) {
       resolve(null);
     }
   });
+}
+
+function capturePlotAsSvg(plotElement) {
+  return new Promise((resolve) => {
+    if (!plotElement || !window.Plotly) {
+      resolve(null);
+      return;
+    }
+
+    try {
+      const sourceWidth = Math.max(900, Math.floor(plotElement.clientWidth || 1200));
+      const sourceHeight = Math.max(500, Math.floor(plotElement.clientHeight || 700));
+      Plotly.toImage(plotElement, {
+        format: "svg",
+        width: sourceWidth,
+        height: sourceHeight,
+        scale: 1,
+      })
+        .then((dataUrl) => resolve(dataUrlToSvgMarkup(dataUrl)))
+        .catch((error) => {
+          console.warn("Plotly SVG capture failed:", error);
+          resolve(null);
+        });
+    } catch (error) {
+      console.warn("SVG capture threw error:", error);
+      resolve(null);
+    }
+  });
+}
+
+function dataUrlToSvgMarkup(dataUrl) {
+  if (!dataUrl || !dataUrl.startsWith("data:image/svg+xml")) {
+    return null;
+  }
+
+  const splitIndex = dataUrl.indexOf(",");
+  if (splitIndex < 0) {
+    return null;
+  }
+
+  const meta = dataUrl.slice(0, splitIndex);
+  const body = dataUrl.slice(splitIndex + 1);
+  try {
+    if (meta.includes(";base64")) {
+      return atob(body);
+    }
+    return decodeURIComponent(body);
+  } catch (error) {
+    console.warn("Failed to decode SVG data URL", error);
+    return null;
+  }
 }
 
 function loadImageFromDataUrl(dataUrl) {

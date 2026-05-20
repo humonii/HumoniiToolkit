@@ -366,3 +366,166 @@ input[type="text"] {
     grid-template-columns: 1fr;
   }
 }
+
+#print-root {
+  display: none;
+}
+
+.print-page {
+  width: 194mm;
+  min-height: 281mm;
+  margin: 0 auto;
+  background: #ffffff;
+  color: #111111;
+  box-sizing: border-box;
+  font-family: "Space Grotesk", "Hiragino Kaku Gothic ProN", sans-serif;
+}
+
+.print-header {
+  border-bottom: 0.5mm solid #d9d9d9;
+  padding-bottom: 2mm;
+  margin-bottom: 2mm;
+}
+
+.print-title {
+  margin: 0;
+  font-family: "Syne", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: 16pt;
+  font-weight: 700;
+}
+
+.print-meta {
+  margin: 1mm 0 0;
+  font-size: 8.8pt;
+  color: #333333;
+}
+
+.print-section-title {
+  margin: 0 0 1.2mm;
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.print-top-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2mm;
+  margin-bottom: 2.2mm;
+}
+
+.print-file-list {
+  margin: 0;
+  padding-left: 4.5mm;
+  font-size: 8.2pt;
+}
+
+.print-file-list li {
+  margin: 0.4mm 0;
+  line-height: 1.25;
+}
+
+.print-table-wrap {
+  border: 0.3mm solid #dedede;
+  border-radius: 1mm;
+  overflow: hidden;
+}
+
+.print-metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 6.8pt;
+}
+
+.print-metrics-table th,
+.print-metrics-table td {
+  border: 0.2mm solid #ececec;
+  padding: 0.7mm 1.1mm;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.print-metrics-table th {
+  background: #fafafa;
+  font-weight: 700;
+}
+
+.print-plot-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.2mm;
+}
+
+.print-plot-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.2mm;
+}
+
+.print-plot-card {
+  border: 0.3mm solid #d8d8d8;
+  border-radius: 1mm;
+  padding: 1.2mm;
+  background: #ffffff;
+  min-height: 84mm;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 1mm;
+}
+
+.print-plot-caption {
+  margin: 0;
+  font-size: 8pt;
+  font-weight: 700;
+  color: #222222;
+}
+
+.print-plot-body {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.print-plot-body svg,
+.print-plot-body img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 78mm;
+  object-fit: contain;
+}
+
+.print-empty {
+  font-size: 8pt;
+  color: #666666;
+}
+
+.print-plot-card.square-plot {
+  aspect-ratio: 1 / 1;
+  min-height: auto;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    margin: 0;
+    background: #ffffff;
+    color: #111111;
+  }
+
+  body > :not(#print-root) {
+    display: none !important;
+  }
+
+  #print-root {
+    display: block;
+    position: static;
+    background: #ffffff;
+    width: 100%;
+  }
+}
