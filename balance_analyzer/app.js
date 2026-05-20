@@ -73,6 +73,7 @@ const dom = {
   compareTotalPathPlot: document.getElementById("compare-total-path-plot"),
   compareEllipsePlot: document.getElementById("compare-ellipse-plot"),
   exportMetrics: document.getElementById("export-metrics"),
+  exportMetricsTxt: document.getElementById("export-metrics-txt"),
   exportJson: document.getElementById("export-json"),
   exportTrajectoryPng: document.getElementById("export-trajectory-png"),
   exportTimeseriesPng: document.getElementById("export-timeseries-png"),
@@ -98,6 +99,7 @@ function init() {
   });
 
   dom.exportMetrics.addEventListener("click", () => exportMetricsCsv());
+  dom.exportMetricsTxt.addEventListener("click", () => exportVisibleMetricsTxt());
   dom.exportJson.addEventListener("click", () => exportAnalysisJson());
   dom.exportTrajectoryPng.addEventListener("click", () => exportPlotPng(dom.trajectoryPlot, "cop_trajectory.png"));
   dom.exportTimeseriesPng.addEventListener("click", () => exportPlotPng(dom.timeseriesPlot, "time_series.png"));
@@ -186,7 +188,6 @@ async function ingestFiles(files) {
         analysis,
       };
       newTrials.push(trial);
-      downloadMetricsTxtForTrial(trial);
     } catch (error) {
       showError(`${file.name}: ${error.message}`);
     }
@@ -545,6 +546,7 @@ function updateExportAvailability() {
   const hasVisibleTrials = state.trials.some((trial) => trial.visible);
   for (const button of [
     dom.exportMetrics,
+    dom.exportMetricsTxt,
     dom.exportJson,
     dom.exportTrajectoryPng,
     dom.exportTimeseriesPng,
@@ -601,9 +603,11 @@ function exportMetricsCsv() {
   downloadText("balance_metrics.csv", toCsvString(headers, rows), "text/csv;charset=utf-8");
 }
 
-function downloadMetricsTxtForTrial(trial) {
-  const filename = metricsTxtFilename(trial.fileName);
-  downloadText(filename, formatTrialMetricsTxt(trial), "text/plain;charset=utf-8");
+function exportVisibleMetricsTxt() {
+  const activeTrials = state.trials.filter((trial) => trial.visible);
+  for (const trial of activeTrials) {
+    downloadText(metricsTxtFilename(trial.fileName), formatTrialMetricsTxt(trial), "text/plain;charset=utf-8");
+  }
 }
 
 function metricsTxtFilename(csvFilename) {
