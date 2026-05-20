@@ -12,6 +12,11 @@ const METRIC_DEFS = [
   ["mean_y", "mean_y"],
 ];
 
+const COMPARISON_METRIC_DEFS = [
+  ["total_path_length", "total_path_length"],
+  ["ellipse_area_95", "ellipse_area_95"],
+];
+
 const METADATA_FIELDS = [
   "試験名称",
   "ステップNo.",
@@ -39,7 +44,6 @@ const DISPLAY_NAMES = {
 
 const state = {
   trials: [],
-  metricKey: "mean_velocity",
   pyodideReady: false,
   pyodideFailed: false,
   pyodide: null,
@@ -48,6 +52,7 @@ const state = {
 const PLOT_CONFIG = {
   responsive: true,
   displaylogo: false,
+  modeBarButtonsToRemove: ["toImage"],
   scrollZoom: true,
   doubleClick: "reset+autosize",
 };
@@ -61,12 +66,12 @@ const dom = {
   status: document.getElementById("status"),
   runtimeStatus: document.getElementById("runtime-status"),
   errorBanner: document.getElementById("error-banner"),
-  metricSelect: document.getElementById("metric-select"),
   fileList: document.getElementById("file-list"),
   metricsTable: document.getElementById("metrics-table"),
   trajectoryPlot: document.getElementById("trajectory-plot"),
   timeseriesPlot: document.getElementById("timeseries-plot"),
-  comparePlot: document.getElementById("compare-plot"),
+  compareTotalPathPlot: document.getElementById("compare-total-path-plot"),
+  compareEllipsePlot: document.getElementById("compare-ellipse-plot"),
   exportMetrics: document.getElementById("export-metrics"),
   exportJson: document.getElementById("export-json"),
   exportTrajectoryPng: document.getElementById("export-trajectory-png"),
@@ -77,13 +82,6 @@ const dom = {
 init();
 
 function init() {
-  for (const [key, label] of METRIC_DEFS) {
-    const option = document.createElement("option");
-    option.value = key;
-    option.textContent = label;
-    dom.metricSelect.appendChild(option);
-  }
-
   dom.dropzone.addEventListener("click", () => dom.fileInput.click());
   dom.pickFiles.addEventListener("click", () => dom.fileInput.click());
   dom.loadSample.addEventListener("click", () => loadSampleCsv());
@@ -99,16 +97,11 @@ function init() {
     }
   });
 
-  dom.metricSelect.addEventListener("change", () => {
-    state.metricKey = dom.metricSelect.value;
-    renderComparisonPlot();
-  });
-
   dom.exportMetrics.addEventListener("click", () => exportMetricsCsv());
   dom.exportJson.addEventListener("click", () => exportAnalysisJson());
   dom.exportTrajectoryPng.addEventListener("click", () => exportPlotPng(dom.trajectoryPlot, "cop_trajectory.png"));
   dom.exportTimeseriesPng.addEventListener("click", () => exportPlotPng(dom.timeseriesPlot, "time_series.png"));
-  dom.exportComparePng.addEventListener("click", () => exportPlotPng(dom.comparePlot, "metrics_comparison.png"));
+  dom.exportComparePng.addEventListener("click", () => exportComparisonPngs());
 
   renderAll();
   loadPyodideRuntime();
@@ -193,6 +186,7 @@ async function ingestFiles(files) {
         analysis,
       };
       newTrials.push(trial);
+      downloadMetricsTxtForTrial(trial);
     } catch (error) {
       showError(`${file.name}: ${error.message}`);
     }
@@ -389,8 +383,8 @@ function renderTrajectoryPlot() {
       y: points.map((point) => point.y),
       text: points.map((point) => `time=${point.time.toFixed(3)}<br>x=${point.x.toFixed(3)}<br>y=${point.y.toFixed(3)}`),
       hovertemplate: "%{text}<extra>%{fullData.name}</extra>",
-      marker: { size: 5 },
-      line: { width: 2 },
+      marker: { size: 3 },
+      line: { width: 1 },
     });
     traces.push({
       type: "scatter",
@@ -500,25 +494,49 @@ function renderComparisonPlot() {
   }
 
   const visibleTrials = state.trials.filter((item) => item.visible);
-  const values = visibleTrials.map((trial) => computeMetricsForTrial(trial)[state.metricKey]);
   const labels = visibleTrials.map((trial) => buildLegendLabel(trial));
+  const fileIndexes = visibleTrials.map((_, index) => index + 1);
+  renderSingleComparisonPlot(dom.compareTotalPathPlot, visibleTrials, fileIndexes, labels, "total_path_length", "total_path_length", "#147565");
+  renderSingleComparisonPlot(dom.compareEllipsePlot, visibleTrials, fileIndexes, labels, "ellipse_area_95", "ellipse_area_95", "#e6844a");
+}
 
-  Plotly.react(dom.comparePlot, [{
-    type: "bar",
-    x: labels,
-    y: values,
-    marker: {
-      color: "#147565",
-      line: { color: "#0f6154", width: 1 },
+function renderSingleComparisonPlot(element, visibleTrials, fileIndexes, labels, metricKey, label, color) {
+  if (!element) {
+    return;
+  }
+
+  const traces = [{
+    type: "scatter",
+    mode: "lines+markers",
+    name: label,
+    x: fileIndexes,
+    y: visibleTrials.map((trial) => computeMetricsForTrial(trial)[metricKey]),
+    customdata: labels,
+    line: {
+      color,
+      width: 2,
     },
-    hovertemplate: `${state.metricKey}: %{y}<extra>%{x}</extra>`,
-  }], {
+    marker: {
+      color,
+      size: 8,
+    },
+    hovertemplate: `file_index: %{x}<br>file: %{customdata}<br>${label}: %{y}<extra></extra>`,
+  }];
+
+  Plotly.react(element, traces, {
+    title: { text: label, font: { size: 15 } },
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "#fefcf6",
-    margin: { t: 20, r: 20, b: 80, l: 55 },
+    margin: { t: 44, r: 20, b: 80, l: 55 },
     dragmode: "pan",
-    xaxis: { tickangle: -18 },
-    yaxis: { title: state.metricKey },
+    showlegend: false,
+    xaxis: {
+      title: "file index",
+      tickmode: "array",
+      tickvals: fileIndexes,
+      ticktext: fileIndexes.map(String),
+    },
+    yaxis: { title: label },
   }, PLOT_CONFIG);
 }
 
@@ -583,10 +601,81 @@ function exportMetricsCsv() {
   downloadText("balance_metrics.csv", toCsvString(headers, rows), "text/csv;charset=utf-8");
 }
 
+function downloadMetricsTxtForTrial(trial) {
+  const filename = metricsTxtFilename(trial.fileName);
+  downloadText(filename, formatTrialMetricsTxt(trial), "text/plain;charset=utf-8");
+}
+
+function metricsTxtFilename(csvFilename) {
+  const dotIndex = csvFilename.lastIndexOf(".");
+  const stem = dotIndex > 0 ? csvFilename.slice(0, dotIndex) : csvFilename;
+  return `${stem}_metrics.txt`;
+}
+
+function formatTrialMetricsTxt(trial) {
+  const lines = [
+    "source_file",
+    `  ${trial.fileName}`,
+    "",
+  ];
+
+  appendKeyValueSection(lines, "metadata", trial.analysis.metadata || {});
+  appendMetricsWithUnitsSection(
+    lines,
+    "builtin_metrics",
+    trial.analysis.builtin_metrics || {},
+    trial.analysis.builtin_metric_units || {},
+  );
+  appendKeyValueSection(lines, "cop_metrics", computeMetricsForTrial(trial));
+
+  if (trial.analysis.com_metrics) {
+    appendKeyValueSection(lines, "com_metrics", trial.analysis.com_metrics);
+  }
+
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+function appendKeyValueSection(lines, title, values) {
+  const entries = Object.entries(values);
+  if (entries.length === 0) {
+    return;
+  }
+
+  lines.push(title);
+  for (const [key, value] of entries) {
+    lines.push(`  ${key}: ${formatTxtValue(value)}`);
+  }
+  lines.push("");
+}
+
+function appendMetricsWithUnitsSection(lines, title, values, units) {
+  const entries = Object.entries(values);
+  if (entries.length === 0) {
+    return;
+  }
+
+  lines.push(title);
+  for (const [key, value] of entries) {
+    const unit = units[key] ? ` ${units[key]}` : "";
+    lines.push(`  ${key}: ${formatTxtValue(value)}${unit}`);
+  }
+  lines.push("");
+}
+
+function formatTxtValue(value) {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      return "nan";
+    }
+    return Number.parseFloat(value.toPrecision(10)).toString();
+  }
+  return String(value);
+}
+
 function exportAnalysisJson() {
   const result = {
     trajectory_mode: "cop",
-    metric_key: state.metricKey,
+    comparison_metric_keys: COMPARISON_METRIC_DEFS.map(([key]) => key),
     generated_at: new Date().toISOString(),
     trials: state.trials.filter((trial) => trial.visible).map((trial) => ({
       file: trial.fileName,
@@ -605,7 +694,7 @@ function exportAnalysisJson() {
 }
 
 function exportPlotPng(element, filename) {
-  if (!window.Plotly || !state.trials.some((trial) => trial.visible)) {
+  if (!element || !window.Plotly || !state.trials.some((trial) => trial.visible)) {
     return;
   }
   Plotly.downloadImage(element, {
@@ -615,6 +704,11 @@ function exportPlotPng(element, filename) {
     height: 720,
     scale: 2,
   });
+}
+
+function exportComparisonPngs() {
+  exportPlotPng(dom.compareTotalPathPlot, "total_path_length_comparison.png");
+  exportPlotPng(dom.compareEllipsePlot, "ellipse_area_95_comparison.png");
 }
 
 function downloadText(filename, text, type) {
@@ -758,7 +852,7 @@ function computeSwayMetricsJs(data, timeCol = "time", xCol = "xp", yCol = "yp") 
 }
 
 function emptyMetrics() {
-  return Object.fromEntries(METRIC_DEFS.map(([key]) => [key, NaN]));
+  return Object.fromEntries([...METRIC_DEFS, ...COMPARISON_METRIC_DEFS].map(([key]) => [key, NaN]));
 }
 
 function mean(values) {

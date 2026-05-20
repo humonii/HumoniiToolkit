@@ -136,6 +136,35 @@ input[type="text"] {
   margin: 0;
 }
 
+.icon-button {
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid #b8d4cc;
+  border-radius: 9px;
+  background: #edf8f5;
+  color: var(--balance-accent);
+  box-shadow: none;
+}
+
+.icon-button:hover {
+  background: #dff2ed;
+  border-color: var(--balance-accent);
+}
+
+.icon-button svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .file-list {
   display: grid;
   gap: 12px;
@@ -247,8 +276,17 @@ input[type="text"] {
   min-height: clamp(360px, 50vw, 560px);
 }
 
-#compare-plot {
+.comparison-plot-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.comparison-plot {
   width: min(96%, clamp(320px, 72vw, 840px));
+}
+
+.legacy-hidden {
+  display: none;
 }
 
 .table-wrap {
@@ -314,7 +352,7 @@ input[type="text"] {
   .plot-surface,
   #trajectory-plot,
   .plot-surface.tall,
-  #compare-plot {
+  .comparison-plot {
     width: 100%;
   }
 

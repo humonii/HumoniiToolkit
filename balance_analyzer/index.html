@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="./style.css" />
   <script defer src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
-  <script type="module" defer src="./app.js"></script>
+  <script type="module" defer src="./app.js?v=20260520-compare-fixed"></script>
 </head>
 <body>
   <div class="topbar">
@@ -47,23 +47,14 @@
 
         <div class="divider"></div>
 
-        <h2>表示・比較設定</h2>
-        <p class="hint">表示軌跡は COP (xp / yp) 固定です。COP軌跡プロットの凡例は file_1, file_2... の順で表示されます。</p>
-
-        <label for="metric-select">比較指標（棒グラフ）</label>
-        <select id="metric-select"></select>
-
-        <div class="divider"></div>
-
         <h2>エクスポート</h2>
         <p class="hint">現在読み込み中の解析結果を CSV / JSON / PNG として保存できます。</p>
 
         <div class="button-stack compact">
           <button id="export-metrics" type="button">指標CSVを書き出す</button>
           <button id="export-json" type="button">解析JSONを書き出す</button>
-          <button id="export-trajectory-png" type="button">COP軌跡PNG</button>
           <button id="export-timeseries-png" type="button">時系列PNG</button>
-          <button id="export-compare-png" type="button">比較PNG</button>
+          <button id="export-compare-png" type="button">比較PNG（2枚）</button>
         </div>
       </aside>
 
@@ -80,8 +71,15 @@
 
         <section class="panel">
           <div class="section-headline">
-            <h2>COP軌跡プロット</h2>
-            <p class="hint">開始点と終了点を表示し、複数ファイルを重ね描きします。</p>
+            <div>
+              <h2>COP軌跡プロット</h2>
+              <p class="hint">開始点と終了点を表示し、複数ファイルを重ね描きします。</p>
+            </div>
+            <button id="export-trajectory-png" type="button" class="icon-button" aria-label="COP軌跡PNGをダウンロード" title="COP軌跡PNGをダウンロード">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+              </svg>
+            </button>
           </div>
           <div id="trajectory-plot" class="plot-surface"></div>
         </section>
@@ -107,9 +105,14 @@
         <section class="panel">
           <div class="section-headline">
             <h2>指標比較プロット</h2>
-            <p class="hint">選択中の指標をファイルごとの棒グラフで比較します。</p>
+            <p class="hint">total_path_length と ellipse_area_95 をファイルインデックス順の線プロットで比較します。</p>
           </div>
-          <div id="compare-plot" class="plot-surface"></div>
+          <div class="comparison-plot-stack">
+            <div id="compare-total-path-plot" class="plot-surface comparison-plot"></div>
+            <div id="compare-ellipse-plot" class="plot-surface comparison-plot"></div>
+          </div>
+          <div id="compare-plot" class="legacy-hidden" aria-hidden="true"></div>
+          <select id="metric-select" class="legacy-hidden" tabindex="-1" aria-hidden="true"></select>
         </section>
       </section>
     </section>

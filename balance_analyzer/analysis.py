@@ -7,6 +7,7 @@ import json
 import math
 import statistics
 import sys
+from pathlib import Path
 from typing import Any
 
 
@@ -294,6 +295,69 @@ def analyze_trial_from_base64(file_b64: str) -> dict:
     return analyze_trial(base64.b64decode(file_b64))
 
 
+def analyze_csv_file(csv_path: str | Path, write_metrics_txt: bool = True) -> dict:
+    path = Path(csv_path)
+    with path.open("rb") as fh:
+        result = analyze_trial(fh.read())
+
+    if write_metrics_txt:
+        output_path = metrics_txt_path(path)
+        output_path.write_text(format_metrics_txt(result, path.name), encoding="utf-8")
+        result["metrics_txt_path"] = str(output_path)
+
+    return result
+
+
+def metrics_txt_path(csv_path: str | Path) -> Path:
+    path = Path(csv_path)
+    return path.with_name(f"{path.stem}_metrics.txt")
+
+
+def format_metrics_txt(result: dict, source_name: str = "") -> str:
+    lines: list[str] = []
+    if source_name:
+        lines.extend(["source_file", f"  {source_name}", ""])
+
+    metadata = result.get("metadata") or {}
+    if metadata:
+        lines.append("metadata")
+        for key, value in metadata.items():
+            lines.append(f"  {key}: {_format_txt_value(value)}")
+        lines.append("")
+
+    builtin_metrics = result.get("builtin_metrics") or {}
+    builtin_units = result.get("builtin_metric_units") or {}
+    if builtin_metrics:
+        lines.append("builtin_metrics")
+        for key, value in builtin_metrics.items():
+            unit = builtin_units.get(key, "")
+            suffix = f" {unit}" if unit else ""
+            lines.append(f"  {key}: {_format_txt_value(value)}{suffix}")
+        lines.append("")
+
+    _append_metrics_section(lines, "cop_metrics", result.get("cop_metrics"))
+    _append_metrics_section(lines, "com_metrics", result.get("com_metrics"))
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _append_metrics_section(lines: list[str], title: str, metrics: dict | None) -> None:
+    if not metrics:
+        return
+    lines.append(title)
+    for key, value in metrics.items():
+        lines.append(f"  {key}: {_format_txt_value(value)}")
+    lines.append("")
+
+
+def _format_txt_value(value: Any) -> str:
+    if isinstance(value, float):
+        if math.isnan(value):
+            return "nan"
+        return f"{value:.10g}"
+    return str(value)
+
+
 def _to_float(value: Any) -> float:
     try:
         result = float(value)
@@ -325,13 +389,13 @@ def _main(argv: list[str]) -> int:
         return 1
 
     target = argv[1]
-    with open(target, "rb") as fh:
-        result = analyze_trial(fh.read())
+    result = analyze_csv_file(target, write_metrics_txt=True)
 
     preview = {
         "metadata": result["metadata"],
         "cop_metrics": result["cop_metrics"],
         "com_metrics": result["com_metrics"],
+        "metrics_txt_path": result["metrics_txt_path"],
     }
     print(json.dumps(preview, ensure_ascii=False, indent=2, allow_nan=True))
     return 0
