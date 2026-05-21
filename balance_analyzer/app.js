@@ -108,19 +108,32 @@ const PRINT_STYLES = `
   .print-top-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 2mm;
-    margin-bottom: 2.2mm;
+    gap: 1.4mm;
+    margin-bottom: 1.6mm;
   }
 
   .print-file-list {
     margin: 0;
     padding-left: 4.5mm;
-    font-size: 8.2pt;
+    font-size: 7.8pt;
   }
 
   .print-file-list li {
-    margin: 0.4mm 0;
+    margin: 0.3mm 0;
     line-height: 1.25;
+  }
+
+  .print-file-index {
+    display: inline-block;
+    min-width: 11mm;
+    font-weight: 700;
+    color: #0b7f6b;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .print-file-meta {
+    color: #666666;
+    font-size: 0.92em;
   }
 
   .print-table-wrap {
@@ -133,7 +146,7 @@ const PRINT_STYLES = `
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    font-size: 6.8pt;
+    font-size: 6.6pt;
   }
 
   .print-metrics-table th,
@@ -153,29 +166,29 @@ const PRINT_STYLES = `
   .print-plot-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 2.2mm;
+    gap: 1.6mm;
   }
 
   .print-plot-pair {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 2.2mm;
+    gap: 1.6mm;
   }
 
   .print-plot-card {
     border: 0.3mm solid #d8d8d8;
     border-radius: 1mm;
-    padding: 1.2mm;
+    padding: 0.9mm;
     background: #ffffff;
-    min-height: 84mm;
+    min-height: 76mm;
     display: grid;
     grid-template-rows: auto 1fr;
-    gap: 1mm;
+    gap: 0.8mm;
   }
 
   .print-plot-caption {
     margin: 0;
-    font-size: 8pt;
+    font-size: 7.4pt;
     font-weight: 700;
     color: #222222;
   }
@@ -191,7 +204,7 @@ const PRINT_STYLES = `
     display: block;
     width: 100%;
     height: auto;
-    max-height: 78mm;
+    max-height: 70mm;
     object-fit: contain;
   }
 
@@ -1235,16 +1248,19 @@ async function buildPrintLayout() {
   const topGrid = document.createElement("section");
   topGrid.className = "print-top-grid";
 
+  const visibleTrials = state.trials.filter((trial) => trial.visible);
+
   const fileBlock = document.createElement("div");
   fileBlock.innerHTML = "<h2 class=\"print-section-title\">読み込みファイル</h2>";
   const fileList = document.createElement("ul");
   fileList.className = "print-file-list";
-  const visibleTrials = state.trials.filter((trial) => trial.visible);
-  for (const trial of visibleTrials) {
+  visibleTrials.forEach((trial, index) => {
     const item = document.createElement("li");
-    item.textContent = `${trial.fileName} (${trial.condition || trial.subject || "N/A"})`;
+    const label = `file_${index + 1}`;
+    const meta = trial.condition || trial.subject || "N/A";
+    item.innerHTML = `<span class="print-file-index">${escapeHtml(label)}</span> ${escapeHtml(trial.fileName)} <span class="print-file-meta">(${escapeHtml(meta)})</span>`;
     fileList.appendChild(item);
-  }
+  });
   fileBlock.appendChild(fileList);
   topGrid.appendChild(fileBlock);
 
