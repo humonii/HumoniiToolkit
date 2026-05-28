@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="./style.css" />
   <script defer src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
-  <script type="module" defer src="./app.js?v=20260528-metric-units-v1"></script>
+  <script type="module" defer src="./app.js?v=20260528-copy-png-v1"></script>
 </head>
 <body>
   <div class="topbar">
@@ -67,11 +67,19 @@
               <h2>COP軌跡プロット</h2>
               <p class="hint">開始点と終了点を表示し、複数ファイルを重ね描きします。</p>
             </div>
-            <button id="export-trajectory-png" type="button" class="icon-button" aria-label="COP軌跡PNGをダウンロード" title="COP軌跡PNGをダウンロード">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
-              </svg>
-            </button>
+            <div class="plot-actions">
+              <button id="copy-trajectory-png" type="button" class="icon-button" aria-label="COP軌跡PNGをクリップボードにコピー" title="COP軌跡PNGをクリップボードにコピー">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M8 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
+                  <rect x="4" y="7" width="12" height="14" rx="2" />
+                </svg>
+              </button>
+              <button id="export-trajectory-png" type="button" class="icon-button" aria-label="COP軌跡PNGをダウンロード" title="COP軌跡PNGをダウンロード">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div id="trajectory-plot" class="plot-surface"></div>
         </section>
@@ -82,11 +90,19 @@
               <h2>時系列プロット</h2>
               <p class="hint">time vs x / y と速度時系列を表示します。</p>
             </div>
-            <button id="export-timeseries-png" type="button" class="icon-button" aria-label="時系列PNGをダウンロード" title="時系列PNGをダウンロード">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
-              </svg>
-            </button>
+            <div class="plot-actions">
+              <button id="copy-timeseries-png" type="button" class="icon-button" aria-label="時系列PNGをクリップボードにコピー" title="時系列PNGをクリップボードにコピー">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M8 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
+                  <rect x="4" y="7" width="12" height="14" rx="2" />
+                </svg>
+              </button>
+              <button id="export-timeseries-png" type="button" class="icon-button" aria-label="時系列PNGをダウンロード" title="時系列PNGをダウンロード">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div id="timeseries-plot" class="plot-surface tall"></div>
         </section>
@@ -117,22 +133,38 @@
             <div class="comparison-plot-item">
               <div class="plot-subhead">
                 <h3>total_path_length</h3>
-                <button id="export-total-path-png" type="button" class="icon-button" aria-label="total_path_length比較PNGをダウンロード" title="total_path_length比較PNGをダウンロード">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
-                  </svg>
-                </button>
+                <div class="plot-actions">
+                  <button id="copy-total-path-png" type="button" class="icon-button" aria-label="total_path_length比較PNGをクリップボードにコピー" title="total_path_length比較PNGをクリップボードにコピー">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M8 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
+                      <rect x="4" y="7" width="12" height="14" rx="2" />
+                    </svg>
+                  </button>
+                  <button id="export-total-path-png" type="button" class="icon-button" aria-label="total_path_length比較PNGをダウンロード" title="total_path_length比較PNGをダウンロード">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div id="compare-total-path-plot" class="plot-surface comparison-plot"></div>
             </div>
             <div class="comparison-plot-item">
               <div class="plot-subhead">
                 <h3>ellipse_area_95</h3>
-                <button id="export-ellipse-png" type="button" class="icon-button" aria-label="ellipse_area_95比較PNGをダウンロード" title="ellipse_area_95比較PNGをダウンロード">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
-                  </svg>
-                </button>
+                <div class="plot-actions">
+                  <button id="copy-ellipse-png" type="button" class="icon-button" aria-label="ellipse_area_95比較PNGをクリップボードにコピー" title="ellipse_area_95比較PNGをクリップボードにコピー">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M8 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
+                      <rect x="4" y="7" width="12" height="14" rx="2" />
+                    </svg>
+                  </button>
+                  <button id="export-ellipse-png" type="button" class="icon-button" aria-label="ellipse_area_95比較PNGをダウンロード" title="ellipse_area_95比較PNGをダウンロード">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div id="compare-ellipse-plot" class="plot-surface comparison-plot"></div>
             </div>

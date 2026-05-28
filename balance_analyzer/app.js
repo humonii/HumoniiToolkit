@@ -256,6 +256,10 @@ const dom = {
   timeseriesPlot: document.getElementById("timeseries-plot"),
   compareTotalPathPlot: document.getElementById("compare-total-path-plot"),
   compareEllipsePlot: document.getElementById("compare-ellipse-plot"),
+  copyTrajectoryPng: document.getElementById("copy-trajectory-png"),
+  copyTimeseriesPng: document.getElementById("copy-timeseries-png"),
+  copyTotalPathPng: document.getElementById("copy-total-path-png"),
+  copyEllipsePng: document.getElementById("copy-ellipse-png"),
   exportTrajectoryPng: document.getElementById("export-trajectory-png"),
   exportTimeseriesPng: document.getElementById("export-timeseries-png"),
   exportTotalPathPng: document.getElementById("export-total-path-png"),
@@ -285,6 +289,10 @@ function init() {
   });
   dom.fileList.addEventListener("change", onTrialLegendControlChange);
 
+  dom.copyTrajectoryPng.addEventListener("click", () => copyPlotPng(dom.trajectoryPlot, "COP軌跡"));
+  dom.copyTimeseriesPng.addEventListener("click", () => copyPlotPng(dom.timeseriesPlot, "時系列"));
+  dom.copyTotalPathPng.addEventListener("click", () => copyPlotPng(dom.compareTotalPathPlot, "total_path_length比較"));
+  dom.copyEllipsePng.addEventListener("click", () => copyPlotPng(dom.compareEllipsePlot, "ellipse_area_95比較"));
   dom.exportTrajectoryPng.addEventListener("click", () => exportPlotPng(dom.trajectoryPlot, "cop_trajectory.png"));
   dom.exportTimeseriesPng.addEventListener("click", () => exportPlotPng(dom.timeseriesPlot, "time_series.png"));
   dom.exportTotalPathPng.addEventListener("click", () => exportPlotPng(dom.compareTotalPathPlot, "total_path_length_comparison.png"));
@@ -955,6 +963,39 @@ function exportPlotPng(element, filename) {
     height: 720,
     scale: 2,
   });
+}
+
+async function copyPlotPng(element, label) {
+  if (!element || !window.Plotly || !state.trials.some((trial) => trial.visible)) {
+    setStatus("コピーするプロットがありません。CSVを読み込んで表示してください。");
+    return;
+  }
+
+  if (!navigator.clipboard || typeof navigator.clipboard.write !== "function" || typeof window.ClipboardItem !== "function") {
+    setStatus("このブラウザまたは表示環境では画像のクリップボードコピーに対応していません。");
+    return;
+  }
+
+  try {
+    setStatus(`${label}PNGをクリップボードにコピーしています...`);
+    const dataUrl = await Plotly.toImage(element, {
+      format: "png",
+      width: 1280,
+      height: 720,
+      scale: 2,
+    });
+    const pngDataUrl = await fillTransparentBackgroundWithWhite(dataUrl);
+    const blob = dataUrlToBlob(pngDataUrl);
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        [blob.type]: blob,
+      }),
+    ]);
+    setStatus(`${label}PNGをクリップボードにコピーしました。`);
+  } catch (error) {
+    console.warn("Failed to copy plot PNG:", error);
+    setStatus("画像のコピーに失敗しました。ブラウザの権限やHTTPS/localhostで開いているかを確認してください。");
+  }
 }
 
 function setStatus(message) {
@@ -1684,6 +1725,17 @@ function dataUrlToSvgMarkup(dataUrl) {
     console.warn("Failed to decode SVG data URL", error);
     return null;
   }
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [header, data] = dataUrl.split(",");
+  const mime = header.match(/^data:(.*?)(;base64)?$/)?.[1] || "image/png";
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mime });
 }
 
 function loadImageFromDataUrl(dataUrl) {
