@@ -15,10 +15,91 @@ Humonii の制作ワークフロー向けツール集です。
 - [Background Remover](https://humonii.github.io/HumoniiToolkit/bg_remove/index.html)
 - [Browser Transcriber](https://humonii.github.io/HumoniiToolkit/transcriber/index.html)
 
-## Local Preview
+## Browser Transcriber — Streamlit 連携
+
+Browser Transcriber は起動中の Streamlit 文字起こしWebページへ遷移します。
+
+### ローカル起動時（推奨）
 
 ```bash
 ./open_atelier_chrome.sh
 ```
 
-ローカル起動では `http://localhost:8766/index.html` を開きます。
+Tailscale 接続済みなら自動検出、またはコンテナが起動中なら `http://127.0.0.1:8501` でアクセスします。
+
+### GitHub Pages 経由でのアクセス時
+
+明示的にリンク先を指定：
+
+```
+https://humonii.github.io/HumoniiToolkit/?streamlit_url=https://<streamlit-url>/streamlit
+```
+
+例：
+- `https://humonii.github.io/HumoniiToolkit/?streamlit_url=https://example.ts.net/streamlit`
+- `https://humonii.github.io/HumoniiToolkit/?streamlit_url=http://192.168.1.100:8501`
+
+### Tailscale 固定URLでのアクセス（前提条件）
+
+**Tailscale Serve を有効にする必要があります**
+
+1. 以下のリンクにアクセス：
+   ```
+   https://login.tailscale.com/f/serve
+   ```
+
+2. Serve 機能を有効化
+
+3. コンテナを起動：
+   ```bash
+   cd transcription_server/docker
+   ./run_streamlit.sh
+   ```
+
+4. ログで URL を確認：
+   ```
+   [run] Tailscale: https://example.ts.net/streamlit
+   ```
+
+### トラブルシューティング
+
+#### Tailscale Serve が有効でない場合
+
+```
+[warn] tailscale serve に失敗しました
+[warn] エラー: Serve is not enabled on your tailnet.
+```
+
+→ https://login.tailscale.com/f/serve にアクセスして有効化してください
+
+#### アクセス不可時の確認
+
+```bash
+# コンテナ起動確認
+docker ps | grep transcription_streamlit
+
+# Tailscale 接続確認
+tailscale status
+
+# Tailscale serve 設定確認
+tailscale serve status
+
+# ローカルでアクセス確認
+curl http://127.0.0.1:8501
+```
+
+#### 手動でルート設定（トラブル時）
+
+```bash
+tailscale serve --bg --set-path /streamlit http://127.0.0.1:8501
+```
+
+## Local Preview
+
+ローカル開発時は下記で起動：
+
+```bash
+./open_atelier_chrome.sh
+```
+
+`http://localhost:8766/index.html` を開きます。

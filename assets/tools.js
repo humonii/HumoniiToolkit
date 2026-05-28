@@ -29,11 +29,6 @@ function resolveStreamlitUrl() {
   const fromStorage = window.localStorage.getItem("humonii.streamlitUrl");
   if (fromStorage) return fromStorage;
 
-  const host = window.location.hostname;
-  if (host && host !== "localhost" && host !== "127.0.0.1") {
-    return `https://${host}${STREAMLIT_ROUTE_PATH}`;
-  }
-
   return null;
 }
 

@@ -5,21 +5,20 @@ PORT="${1:-8766}"
 URL="http://localhost:${PORT}/index.html"
 
 STREAMLIT_URL="${HUMONII_STREAMLIT_URL:-}"
-TAILSCALE_ROUTE_PATH="${TAILSCALE_ROUTE_PATH:-/streamlit}"
+
+# Tailscale DNS 経由でのアクセスを試みる
 if [ -z "${STREAMLIT_URL}" ] && command -v tailscale >/dev/null 2>&1 && tailscale status >/dev/null 2>&1; then
   TS_DNS_NAME=$(tailscale status --json 2>/dev/null | sed -n 's/.*"DNSName":"\([^"]*\)".*/\1/p' | head -n1)
   if [ -n "${TS_DNS_NAME}" ]; then
-    STREAMLIT_URL="https://${TS_DNS_NAME%.}${TAILSCALE_ROUTE_PATH}"
+    STREAMLIT_URL="https://${TS_DNS_NAME%.}/streamlit"
   fi
 fi
 
+# ローカルコンテナでの起動を確認（フォールバック）
 if [ -z "${STREAMLIT_URL}" ] && command -v docker >/dev/null 2>&1; then
   CONTAINER_NAME="transcription_streamlit_${USER}"
   if docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
-    STREAMLIT_PORT=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${CONTAINER_NAME}" 2>/dev/null | sed -n 's/^STREAMLIT_PORT=//p' | head -n1)
-    if [ -n "${STREAMLIT_PORT}" ]; then
-      STREAMLIT_URL="http://127.0.0.1:${STREAMLIT_PORT}"
-    fi
+    STREAMLIT_URL="http://127.0.0.1:8501"
   fi
 fi
 
