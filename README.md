@@ -39,38 +39,38 @@ https://humonii.github.io/HumoniiToolkit/?streamlit_url=https://<streamlit-url>/
 - `https://humonii.github.io/HumoniiToolkit/?streamlit_url=https://example.ts.net/streamlit`
 - `https://humonii.github.io/HumoniiToolkit/?streamlit_url=http://192.168.1.100:8501`
 
-### Tailscale 固定URLでのアクセス（前提条件）
+### Tailscale 固定URL でのアクセス（初期セットアップ）
 
-**Tailscale Serve を有効にする必要があります**
+**以下の手順は最初に一度だけ必要です**
 
-1. 以下のリンクにアクセス：
+1. **オペレーター権限を設定**
+   ```bash
+   sudo tailscale set --operator=hmpc2024a
    ```
-   https://login.tailscale.com/f/serve
-   ```
 
-2. Serve 機能を有効化
-
-3. コンテナを起動：
+2. **コンテナを起動**
    ```bash
    cd transcription_server/docker
    ./run_streamlit.sh
    ```
 
-4. ログで URL を確認：
+3. **ログで確認**
    ```
    [run] Tailscale: https://example.ts.net/streamlit
    ```
 
+以降はコンテナ再起動時に自動的にルートが設定されます。
+
 ### トラブルシューティング
 
-#### Tailscale Serve が有効でない場合
+#### オペレーター権限エラーが出た場合
 
 ```
-[warn] tailscale serve に失敗しました
-[warn] エラー: Serve is not enabled on your tailnet.
+[info] 初回セットアップが必要です。以下を実行してください:
+[info]   sudo tailscale set --operator=hmpc2024a
 ```
 
-→ https://login.tailscale.com/f/serve にアクセスして有効化してください
+→ 上記コマンドを実行（パスワード入力が必要）
 
 #### アクセス不可時の確認
 
