@@ -215,6 +215,30 @@ main {
   font-size: 0.85rem;
 }
 
+.launch-notice {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  max-width: min(88vw, 540px);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d8cff6;
+  background: rgba(255, 255, 255, 0.98);
+  color: #4c3e63;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(70, 46, 110, 0.18);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+  z-index: 50;
+}
+
+.launch-notice.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 @keyframes reveal {
   to {
     opacity: 1;
@@ -233,5 +257,12 @@ main {
 
   .tool-card {
     border-radius: 14px;
+  }
+
+  .launch-notice {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-width: none;
   }
 }

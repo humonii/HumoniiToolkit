@@ -1,3 +1,44 @@
+const STREAMLIT_ROUTE_PATH = "/streamlit";
+
+function showTranscriberTroubleshootingNotice() {
+  const existing = document.getElementById("transcriber-launch-notice");
+  if (existing) existing.remove();
+
+  const notice = document.createElement("div");
+  notice.id = "transcriber-launch-notice";
+  notice.className = "launch-notice";
+  notice.textContent = "Browser Transcriberの遷移先にアクセスできない場合は、Tailscaleの接続・公開設定が完了しているか確認してください。";
+  document.body.appendChild(notice);
+
+  window.setTimeout(() => {
+    notice.classList.add("visible");
+  }, 10);
+
+  window.setTimeout(() => {
+    notice.classList.remove("visible");
+    window.setTimeout(() => notice.remove(), 220);
+  }, 7000);
+}
+
+function resolveStreamlitUrl() {
+  const fromQuery = new URLSearchParams(window.location.search).get("streamlit_url");
+  if (fromQuery) return fromQuery;
+
+  if (window.HUMONII_STREAMLIT_URL) return window.HUMONII_STREAMLIT_URL;
+
+  const fromStorage = window.localStorage.getItem("humonii.streamlitUrl");
+  if (fromStorage) return fromStorage;
+
+  const host = window.location.hostname;
+  if (host && host !== "localhost" && host !== "127.0.0.1") {
+    return `https://${host}${STREAMLIT_ROUTE_PATH}`;
+  }
+
+  return null;
+}
+
+const streamlitUrl = resolveStreamlitUrl();
+
 const tools = [
   {
     name: "Balance Analyzer",
@@ -36,8 +77,9 @@ const tools = [
   },
   {
     name: "Browser Transcriber",
-    description: "Whisperをブラウザ内で実行し、音声/動画を文字起こししてTXT/SRT出力します。",
-    href: "./transcriber/index.html",
+    description: "起動中のStreamlit文字起こしWebページを開きます。",
+    href: streamlitUrl || "./transcriber/index.html",
+    external: Boolean(streamlitUrl),
     tags: ["Audio", "Whisper", "TXT", "SRT"],
     status: "ready",
   },
@@ -62,6 +104,15 @@ for (const tool of tools) {
 
   const launch = card.querySelector(".launch");
   launch.href = tool.href;
+  if (tool.external) {
+    launch.target = "_blank";
+    launch.rel = "noopener noreferrer";
+    if (tool.name === "Browser Transcriber") {
+      launch.addEventListener("click", () => {
+        showTranscriberTroubleshootingNotice();
+      });
+    }
+  }
   if (tool.status === "coming-soon") {
     launch.textContent = "Coming Soon";
     launch.classList.add("soon");

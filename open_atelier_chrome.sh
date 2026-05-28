@@ -4,6 +4,29 @@ BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT="${1:-8766}"
 URL="http://localhost:${PORT}/index.html"
 
+STREAMLIT_URL="${HUMONII_STREAMLIT_URL:-}"
+TAILSCALE_ROUTE_PATH="${TAILSCALE_ROUTE_PATH:-/streamlit}"
+if [ -z "${STREAMLIT_URL}" ] && command -v tailscale >/dev/null 2>&1 && tailscale status >/dev/null 2>&1; then
+  TS_DNS_NAME=$(tailscale status --json 2>/dev/null | sed -n 's/.*"DNSName":"\([^"]*\)".*/\1/p' | head -n1)
+  if [ -n "${TS_DNS_NAME}" ]; then
+    STREAMLIT_URL="https://${TS_DNS_NAME%.}${TAILSCALE_ROUTE_PATH}"
+  fi
+fi
+
+if [ -z "${STREAMLIT_URL}" ] && command -v docker >/dev/null 2>&1; then
+  CONTAINER_NAME="transcription_streamlit_${USER}"
+  if docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
+    STREAMLIT_PORT=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${CONTAINER_NAME}" 2>/dev/null | sed -n 's/^STREAMLIT_PORT=//p' | head -n1)
+    if [ -n "${STREAMLIT_PORT}" ]; then
+      STREAMLIT_URL="http://127.0.0.1:${STREAMLIT_PORT}"
+    fi
+  fi
+fi
+
+if [ -n "${STREAMLIT_URL}" ]; then
+  URL="${URL}?streamlit_url=${STREAMLIT_URL}"
+fi
+
 # Check if server is already running
 if ! curl -fsS --max-time 2 "${URL}" >/dev/null 2>&1; then
   echo "Starting Tool Atelier server on port ${PORT}..."
@@ -71,4 +94,9 @@ fi
 
 echo ""
 echo "✓ Opened: ${URL}"
+if [ -n "${STREAMLIT_URL}" ]; then
+  echo "  Browser Transcriber target: ${STREAMLIT_URL}"
+else
+  echo "  Browser Transcriber target: 未設定（従来のローカルTranscriberを開きます）"
+fi
 echo "  Log file: /tmp/tool_atelier_http.log"
