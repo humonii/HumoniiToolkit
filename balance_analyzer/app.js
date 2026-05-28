@@ -6,6 +6,7 @@ const METRIC_DEFS = [
   ["range_y", "range_y"],
   ["rms_x", "rms_x"],
   ["rms_y", "rms_y"],
+  ["rms_radius", "rms_radius"],
   ["rectangle_area", "rectangle_area"],
   ["ellipse_area_95", "ellipse_area_95"],
   ["mean_x", "mean_x"],
@@ -16,6 +17,24 @@ const COMPARISON_METRIC_DEFS = [
   ["total_path_length", "total_path_length"],
   ["ellipse_area_95", "ellipse_area_95"],
 ];
+
+const METRIC_UNITS = {
+  sample_count: "count",
+  duration: "s",
+  sampling_rate_estimated: "Hz",
+  total_path_length: "mm",
+  mean_velocity: "mm/s",
+  max_velocity: "mm/s",
+  range_x: "mm",
+  range_y: "mm",
+  rms_x: "mm",
+  rms_y: "mm",
+  rms_radius: "mm",
+  rectangle_area: "mm^2",
+  ellipse_area_95: "mm^2",
+  mean_x: "mm",
+  mean_y: "mm",
+};
 
 const METADATA_FIELDS = [
   "試験名称",
@@ -237,6 +256,10 @@ const dom = {
   timeseriesPlot: document.getElementById("timeseries-plot"),
   compareTotalPathPlot: document.getElementById("compare-total-path-plot"),
   compareEllipsePlot: document.getElementById("compare-ellipse-plot"),
+  exportTrajectoryPng: document.getElementById("export-trajectory-png"),
+  exportTimeseriesPng: document.getElementById("export-timeseries-png"),
+  exportTotalPathPng: document.getElementById("export-total-path-png"),
+  exportEllipsePng: document.getElementById("export-ellipse-png"),
   exportPdf: document.getElementById("export-pdf"),
   printRoot: document.getElementById("print-root"),
 };
@@ -260,7 +283,12 @@ function init() {
       dom.fileInput.click();
     }
   });
+  dom.fileList.addEventListener("change", onTrialLegendControlChange);
 
+  dom.exportTrajectoryPng.addEventListener("click", () => exportPlotPng(dom.trajectoryPlot, "cop_trajectory.png"));
+  dom.exportTimeseriesPng.addEventListener("click", () => exportPlotPng(dom.timeseriesPlot, "time_series.png"));
+  dom.exportTotalPathPng.addEventListener("click", () => exportPlotPng(dom.compareTotalPathPlot, "total_path_length_comparison.png"));
+  dom.exportEllipsePng.addEventListener("click", () => exportPlotPng(dom.compareEllipsePlot, "ellipse_area_95_comparison.png"));
   dom.exportPdf.addEventListener("click", () => exportPdf());
 
   renderAll();
@@ -319,14 +347,16 @@ function resetLoadedFiles() {
 
 async function ingestFiles(files) {
   clearError();
-  setStatus(`${files.length} 件のCSVを解析中...`);
+  const csvFiles = files.filter((file) => file.name.toLowerCase().endsWith(".csv"));
+  if (csvFiles.length === 0) {
+    setStatus("CSVファイルが選択されていません。");
+    return;
+  }
+
+  setStatus(`${csvFiles.length} 件のCSVを解析中...`);
 
   const newTrials = [];
-  for (const file of files) {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      continue;
-    }
-
+  for (const file of csvFiles) {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const analysis = await analyzeBytes(bytes);
@@ -337,6 +367,7 @@ async function ingestFiles(files) {
         sourceFormat: analysis.format || "unknown",
         analysisSource: analysis.analysis_source || "javascript",
         visible: true,
+        loadOrder: state.trials.length + newTrials.length,
         subject: "",
         condition: analysis.metadata?.["実験の種類"] || "",
         trialLabel: String(analysis.metadata?.["ステップNo."] || state.trials.length + newTrials.length + 1),
@@ -352,8 +383,11 @@ async function ingestFiles(files) {
   }
 
   state.trials.push(...newTrials);
+  sortAndAnnotateTrials();
   if (newTrials.length > 0) {
     setStatus(`${newTrials.length} 件のCSVを読み込みました。`);
+  } else {
+    setStatus("読み込めるCSVはありませんでした。");
   }
   renderAll();
 }
@@ -425,7 +459,20 @@ function renderAll() {
   renderTrajectoryPlot();
   renderTimeSeriesPlot();
   renderComparisonPlot();
-  updatePdfExportAvailability();
+  updateExportAvailability();
+}
+
+function updateExportAvailability() {
+  const hasVisibleTrials = state.trials.some((trial) => trial.visible);
+  for (const button of [
+    dom.exportTrajectoryPng,
+    dom.exportTimeseriesPng,
+    dom.exportTotalPathPng,
+    dom.exportEllipsePng,
+    dom.exportPdf,
+  ]) {
+    button.disabled = !hasVisibleTrials;
+  }
 }
 
 function updatePdfExportAvailability() {
@@ -447,6 +494,7 @@ function renderFileList() {
 function renderTrialCard(trial) {
   const metadata = buildMetadataSummary(trial);
   const mapping = resolveActiveMapping(trial);
+  const legendLabel = buildLegendLabel(trial);
 
   return `
     <article class="trial-card" data-id="${escapeHtml(trial.id)}">
@@ -461,7 +509,24 @@ function renderTrialCard(trial) {
         </div>
       </div>
 
+      <div class="legend-controls">
+        <label>
+          <span>day</span>
+          <input type="number" min="1" step="1" value="${escapeAttribute(trial.dayIndex || "")}" data-field="dayIndex" />
+        </label>
+        <label>
+          <span>session</span>
+          <select data-field="sessionLabel">
+            ${renderSessionOption("pre", trial.sessionLabel)}
+            ${renderSessionOption("post", trial.sessionLabel)}
+            ${renderSessionOption("session 3", trial.sessionLabel)}
+            ${renderSessionOption("session 4", trial.sessionLabel)}
+          </select>
+        </label>
+      </div>
+
       <div class="trial-facts">
+        <span>legend: ${escapeHtml(legendLabel)}</span>
         <span>condition: ${escapeHtml(trial.condition || "-")}</span>
         <span>trial: ${escapeHtml(trial.trialLabel || "-")}</span>
         <span>subject: ${escapeHtml(trial.subject || "-")}</span>
@@ -472,6 +537,34 @@ function renderTrialCard(trial) {
       </dl>
     </article>
   `;
+}
+
+function renderSessionOption(value, selectedValue) {
+  const selected = value === selectedValue ? " selected" : "";
+  return `<option value="${escapeAttribute(value)}"${selected}>${escapeHtml(value)}</option>`;
+}
+
+function onTrialLegendControlChange(event) {
+  const field = event.target?.dataset?.field;
+  if (!field) {
+    return;
+  }
+
+  const card = event.target.closest(".trial-card");
+  const trial = state.trials.find((item) => item.id === card?.dataset.id);
+  if (!trial) {
+    return;
+  }
+
+  if (field === "dayIndex") {
+    const value = Number.parseInt(event.target.value, 10);
+    trial.dayIndex = Number.isFinite(value) && value > 0 ? value : "";
+  } else if (field === "sessionLabel") {
+    trial.sessionLabel = event.target.value || "";
+  }
+
+  trial.legendManuallyEdited = true;
+  renderAll();
 }
 
 function buildMetadataSummary(trial) {
@@ -510,11 +603,11 @@ function renderMetricsTable() {
     return;
   }
 
-  const headers = ["metric", ...activeTrials.map((_, index) => `file_${index + 1}`)];
+  const headers = ["metric", "unit", ...activeTrials.map((trial) => buildLegendLabel(trial))];
   const headHtml = `<thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>`;
 
   const bodyRows = METRIC_DEFS.map(([metricKey]) => {
-    const cells = [metricKey, ...activeTrials.map((trial) => {
+    const cells = [metricKey, METRIC_UNITS[metricKey] || "-", ...activeTrials.map((trial) => {
       const metrics = computeMetricsForTrial(trial);
       return formatMetricValue(metrics[metricKey]);
     })];
@@ -545,7 +638,7 @@ function renderTrajectoryPlot() {
     allXValues.push(...points.map((p) => p.x));
     allYValues.push(...points.map((p) => p.y));
     
-    const label = `file_${index + 1}`;
+    const label = buildLegendLabel(trial);
     traces.push({
       type: "scatter",
       mode: "lines+markers",
@@ -690,12 +783,11 @@ function renderComparisonPlot() {
 
   const visibleTrials = state.trials.filter((item) => item.visible);
   const labels = visibleTrials.map((trial) => buildLegendLabel(trial));
-  const fileIndexes = visibleTrials.map((_, index) => index + 1);
-  renderSingleComparisonPlot(dom.compareTotalPathPlot, visibleTrials, fileIndexes, labels, "total_path_length", "total_path_length", "#147565");
-  renderSingleComparisonPlot(dom.compareEllipsePlot, visibleTrials, fileIndexes, labels, "ellipse_area_95", "ellipse_area_95", "#e6844a");
+  renderSingleComparisonPlot(dom.compareTotalPathPlot, visibleTrials, labels, "total_path_length", "total_path_length", "#147565");
+  renderSingleComparisonPlot(dom.compareEllipsePlot, visibleTrials, labels, "ellipse_area_95", "ellipse_area_95", "#e6844a");
 }
 
-function renderSingleComparisonPlot(element, visibleTrials, fileIndexes, labels, metricKey, label, color) {
+function renderSingleComparisonPlot(element, visibleTrials, labels, metricKey, label, color) {
   if (!element) {
     return;
   }
@@ -704,9 +796,9 @@ function renderSingleComparisonPlot(element, visibleTrials, fileIndexes, labels,
     type: "scatter",
     mode: "lines+markers",
     name: label,
-    x: fileIndexes,
+    x: labels,
     y: visibleTrials.map((trial) => computeMetricsForTrial(trial)[metricKey]),
-    customdata: labels,
+    customdata: visibleTrials.map((trial) => trial.fileName),
     line: {
       color,
       width: 2,
@@ -715,7 +807,7 @@ function renderSingleComparisonPlot(element, visibleTrials, fileIndexes, labels,
       color,
       size: 8,
     },
-    hovertemplate: `file_index: %{x}<br>file: %{customdata}<br>${label}: %{y}<extra></extra>`,
+    hovertemplate: `label: %{x}<br>file: %{customdata}<br>${label}: %{y}<extra></extra>`,
   }];
 
   Plotly.react(element, traces, {
@@ -727,18 +819,105 @@ function renderSingleComparisonPlot(element, visibleTrials, fileIndexes, labels,
     dragmode: "pan",
     showlegend: false,
     xaxis: {
-      title: { text: "file index", font: { size: 12 } },
+      title: { text: "day / session", font: { size: 12 } },
       tickfont: { size: 10 },
-      tickmode: "array",
-      tickvals: fileIndexes,
-      ticktext: fileIndexes.map(String),
+      type: "category",
     },
     yaxis: { title: { text: label, font: { size: 12 } }, tickfont: { size: 10 } },
   }, PLOT_CONFIG);
 }
 
 function buildLegendLabel(trial) {
+  if (trial.dayIndex && trial.sessionLabel) {
+    return `day ${trial.dayIndex} ${trial.sessionLabel}`;
+  }
   return trial.condition || trial.subject || trial.fileName;
+}
+
+function sortAndAnnotateTrials() {
+  state.trials.sort((a, b) => {
+    const aTime = getTrialTimestamp(a);
+    const bTime = getTrialTimestamp(b);
+    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+      return aTime - bTime;
+    }
+    if (Number.isFinite(aTime) !== Number.isFinite(bTime)) {
+      return Number.isFinite(aTime) ? -1 : 1;
+    }
+    return (a.loadOrder ?? 0) - (b.loadOrder ?? 0);
+  });
+
+  const dateToDayIndex = new Map();
+  for (const trial of state.trials) {
+    const dateKey = getTrialDateKey(trial);
+    if (!dateKey) {
+      if (!trial.legendManuallyEdited) {
+        trial.dayIndex = "";
+        trial.sessionLabel = "";
+      }
+      continue;
+    }
+    if (!dateToDayIndex.has(dateKey)) {
+      dateToDayIndex.set(dateKey, dateToDayIndex.size + 1);
+    }
+    if (!trial.legendManuallyEdited) {
+      trial.dayIndex = dateToDayIndex.get(dateKey);
+    }
+  }
+
+  const dayCounts = new Map();
+  for (const trial of state.trials) {
+    if (!trial.dayIndex) {
+      continue;
+    }
+    const count = (dayCounts.get(trial.dayIndex) || 0) + 1;
+    dayCounts.set(trial.dayIndex, count);
+    if (!trial.legendManuallyEdited) {
+      trial.sessionIndex = count;
+      trial.sessionLabel = count === 1 ? "pre" : count === 2 ? "post" : `session ${count}`;
+    }
+  }
+}
+
+function getTrialTimestamp(trial) {
+  const parsed = parseTrialDate(trial);
+  return parsed ? parsed.getTime() : NaN;
+}
+
+function getTrialDateKey(trial) {
+  const parsed = parseTrialDate(trial);
+  if (!parsed) {
+    return "";
+  }
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseTrialDate(trial) {
+  const rawValue = trial.analysis?.metadata?.["試験開始日時"];
+  if (!rawValue) {
+    return null;
+  }
+
+  const text = String(rawValue).trim();
+  const match = text.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (match) {
+    const [, year, month, day, hour = "0", minute = "0", second = "0"] = match;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const fallback = new Date(text);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
 }
 
 function collectValidPoints(data, timeKey, xKey, yKey) {
@@ -762,6 +941,20 @@ function computeVelocitySeries(points) {
     velocities.push({ time: curr.time, velocity: distance / dt });
   }
   return velocities;
+}
+
+function exportPlotPng(element, filename) {
+  if (!element || !window.Plotly || !state.trials.some((trial) => trial.visible)) {
+    return;
+  }
+
+  Plotly.downloadImage(element, {
+    format: "png",
+    filename: filename.replace(/\.png$/, ""),
+    width: 1280,
+    height: 720,
+    scale: 2,
+  });
 }
 
 function setStatus(message) {
@@ -791,7 +984,7 @@ function formatMetricValue(value) {
   if (!Number.isFinite(value)) {
     return "NaN";
   }
-  if (Math.abs(value) >= 1000 || Math.abs(value) < 0.01) {
+  if (Math.abs(value) >= 10000) {
     return value.toExponential(4);
   }
   return value.toFixed(4);
@@ -827,6 +1020,7 @@ function computeSwayMetricsJs(data, timeCol = "time", xCol = "xp", yCol = "yp") 
   const duration = Math.max(...times) - Math.min(...times);
   const rmsX = Math.sqrt(mean(xs.map((value) => (value - meanX) ** 2)));
   const rmsY = Math.sqrt(mean(ys.map((value) => (value - meanY) ** 2)));
+  const rmsRadius = Math.hypot(rmsX, rmsY);
 
   let totalPathLength = NaN;
   let meanVelocity = NaN;
@@ -872,6 +1066,7 @@ function computeSwayMetricsJs(data, timeCol = "time", xCol = "xp", yCol = "yp") 
     range_y: rangeY,
     rms_x: rmsX,
     rms_y: rmsY,
+    rms_radius: rmsRadius,
     rectangle_area: rangeX * rangeY,
     ellipse_area_95: ellipseArea95,
     mean_x: meanX,
@@ -1256,7 +1451,7 @@ async function buildPrintLayout() {
   fileList.className = "print-file-list";
   visibleTrials.forEach((trial, index) => {
     const item = document.createElement("li");
-    const label = `file_${index + 1}`;
+    const label = buildLegendLabel(trial);
     const meta = trial.condition || trial.subject || "N/A";
     item.innerHTML = `<span class="print-file-index">${escapeHtml(label)}</span> ${escapeHtml(trial.fileName)} <span class="print-file-meta">(${escapeHtml(meta)})</span>`;
     fileList.appendChild(item);

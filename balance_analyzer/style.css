@@ -223,6 +223,32 @@ input[type="text"] {
   font-size: 0.78rem;
 }
 
+.legend-controls {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.35fr) minmax(140px, 0.65fr);
+  gap: 8px;
+  max-width: 360px;
+}
+
+.legend-controls label {
+  margin: 0;
+}
+
+.legend-controls span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.legend-controls input,
+.legend-controls select {
+  width: 100%;
+  min-height: 34px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+}
+
 .trial-toggle {
   display: inline-flex;
   align-items: center;
@@ -279,6 +305,25 @@ input[type="text"] {
 .comparison-plot-stack {
   display: grid;
   gap: 18px;
+}
+
+.comparison-plot-item {
+  display: grid;
+  gap: 8px;
+}
+
+.plot-subhead {
+  width: min(96%, clamp(320px, 72vw, 840px));
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plot-subhead h3 {
+  margin: 0;
+  font-size: 0.94rem;
 }
 
 .comparison-plot {
@@ -352,6 +397,7 @@ input[type="text"] {
   .plot-surface,
   #trajectory-plot,
   .plot-surface.tall,
+  .plot-subhead,
   .comparison-plot {
     width: 100%;
   }
@@ -363,6 +409,10 @@ input[type="text"] {
 
 @media (max-width: 640px) {
   .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .legend-controls {
     grid-template-columns: 1fr;
   }
 }

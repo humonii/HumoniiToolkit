@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="./style.css" />
   <script defer src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
-  <script type="module" defer src="./app.js?v=20260521-print-a4-v1"></script>
+  <script type="module" defer src="./app.js?v=20260528-metric-units-v1"></script>
 </head>
 <body>
   <div class="topbar">
@@ -29,13 +29,13 @@
     <section class="grid analyzer-grid">
       <aside class="panel control-panel">
         <h2>読み込み</h2>
-        <p class="hint">Shift-JIS / CP932 形式の床反力計CSVに対応しています。複数ファイルの同時読込が可能です。データはブラウザ内のみで処理されます。</p>
+        <p class="hint">Shift-JIS / CP932 形式の床反力計CSVに対応しています。複数ファイルをまとめて選択・ドラッグ&ドロップできます。データはブラウザ内のみで処理されます。</p>
         <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="CSVファイルをドラッグアンドドロップ">
           <strong>CSVファイルをここにドラッグ&ドロップ</strong>
-          <span>またはファイルを選択</span>
+          <span>または複数ファイルを選択</span>
         </div>
         <input id="file-input" type="file" accept=".csv,text/csv" multiple hidden />
-        <button id="pick-files" type="button">ファイルを選択</button>
+        <button id="pick-files" type="button">CSVファイルを選択</button>
         <button id="load-sample" type="button" class="alt">サンプルCSVを読み込む</button>
         <button id="reset-files" type="button" class="alt">読み込みをリセット</button>
 
@@ -78,8 +78,15 @@
 
         <section class="panel">
           <div class="section-headline">
-            <h2>時系列プロット</h2>
-            <p class="hint">time vs x / y と速度時系列を表示します。</p>
+            <div>
+              <h2>時系列プロット</h2>
+              <p class="hint">time vs x / y と速度時系列を表示します。</p>
+            </div>
+            <button id="export-timeseries-png" type="button" class="icon-button" aria-label="時系列PNGをダウンロード" title="時系列PNGをダウンロード">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+              </svg>
+            </button>
           </div>
           <div id="timeseries-plot" class="plot-surface tall"></div>
         </section>
@@ -107,8 +114,28 @@
             <p class="hint">total_path_length と ellipse_area_95 をファイルインデックス順の線プロットで比較します。</p>
           </div>
           <div class="comparison-plot-stack">
-            <div id="compare-total-path-plot" class="plot-surface comparison-plot"></div>
-            <div id="compare-ellipse-plot" class="plot-surface comparison-plot"></div>
+            <div class="comparison-plot-item">
+              <div class="plot-subhead">
+                <h3>total_path_length</h3>
+                <button id="export-total-path-png" type="button" class="icon-button" aria-label="total_path_length比較PNGをダウンロード" title="total_path_length比較PNGをダウンロード">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+                  </svg>
+                </button>
+              </div>
+              <div id="compare-total-path-plot" class="plot-surface comparison-plot"></div>
+            </div>
+            <div class="comparison-plot-item">
+              <div class="plot-subhead">
+                <h3>ellipse_area_95</h3>
+                <button id="export-ellipse-png" type="button" class="icon-button" aria-label="ellipse_area_95比較PNGをダウンロード" title="ellipse_area_95比較PNGをダウンロード">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+                  </svg>
+                </button>
+              </div>
+              <div id="compare-ellipse-plot" class="plot-surface comparison-plot"></div>
+            </div>
           </div>
           <div id="compare-plot" class="legacy-hidden" aria-hidden="true"></div>
           <select id="metric-select" class="legacy-hidden" tabindex="-1" aria-hidden="true"></select>

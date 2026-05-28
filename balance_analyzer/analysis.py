@@ -211,6 +211,7 @@ def compute_sway_metrics(
             "range_y": math.nan,
             "rms_x": math.nan,
             "rms_y": math.nan,
+            "rms_radius": math.nan,
             "rectangle_area": math.nan,
             "ellipse_area_95": math.nan,
             "mean_x": math.nan,
@@ -242,6 +243,8 @@ def compute_sway_metrics(
     sampling_rate_estimated = (1.0 / statistics.median(step_intervals)) if step_intervals else math.nan
 
     ellipse_area_95 = _ellipse_area_95(xs, ys, mean_x, mean_y)
+    rms_x = math.sqrt(sum((value - mean_x) ** 2 for value in xs) / len(xs))
+    rms_y = math.sqrt(sum((value - mean_y) ** 2 for value in ys) / len(ys))
 
     return {
         "sample_count": float(len(points)),
@@ -252,8 +255,9 @@ def compute_sway_metrics(
         "max_velocity": max_velocity,
         "range_x": max(xs) - min(xs),
         "range_y": max(ys) - min(ys),
-        "rms_x": math.sqrt(sum((value - mean_x) ** 2 for value in xs) / len(xs)),
-        "rms_y": math.sqrt(sum((value - mean_y) ** 2 for value in ys) / len(ys)),
+        "rms_x": rms_x,
+        "rms_y": rms_y,
+        "rms_radius": math.hypot(rms_x, rms_y),
         "rectangle_area": (max(xs) - min(xs)) * (max(ys) - min(ys)),
         "ellipse_area_95": ellipse_area_95,
         "mean_x": mean_x,
