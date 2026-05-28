@@ -1,5 +1,16 @@
 const STREAMLIT_ROUTE_PATH = "/streamlit";
 
+function normalizeStreamlitUrl(url) {
+  if (!url) return url;
+
+  // '/streamlit' で終わるURLは '/streamlit/' にそろえる。
+  if (/\/streamlit(?:\?.*)?$/.test(url) && !/\/streamlit\//.test(url)) {
+    return url.replace(/\/streamlit(\?.*)?$/, "/streamlit/$1");
+  }
+
+  return url;
+}
+
 function showTranscriberTroubleshootingNotice() {
   const existing = document.getElementById("transcriber-launch-notice");
   if (existing) existing.remove();
@@ -22,12 +33,12 @@ function showTranscriberTroubleshootingNotice() {
 
 function resolveStreamlitUrl() {
   const fromQuery = new URLSearchParams(window.location.search).get("streamlit_url");
-  if (fromQuery) return fromQuery;
+  if (fromQuery) return normalizeStreamlitUrl(fromQuery);
 
-  if (window.HUMONII_STREAMLIT_URL) return window.HUMONII_STREAMLIT_URL;
+  if (window.HUMONII_STREAMLIT_URL) return normalizeStreamlitUrl(window.HUMONII_STREAMLIT_URL);
 
   const fromStorage = window.localStorage.getItem("humonii.streamlitUrl");
-  if (fromStorage) return fromStorage;
+  if (fromStorage) return normalizeStreamlitUrl(fromStorage);
 
   return null;
 }

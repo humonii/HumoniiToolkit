@@ -10,7 +10,7 @@ STREAMLIT_URL="${HUMONII_STREAMLIT_URL:-}"
 if [ -z "${STREAMLIT_URL}" ] && command -v tailscale >/dev/null 2>&1 && tailscale status >/dev/null 2>&1; then
   TS_DNS_NAME=$(tailscale status --json 2>/dev/null | sed -n 's/.*"DNSName":"\([^"]*\)".*/\1/p' | head -n1)
   if [ -n "${TS_DNS_NAME}" ]; then
-    STREAMLIT_URL="https://${TS_DNS_NAME%.}/streamlit"
+    STREAMLIT_URL="https://${TS_DNS_NAME%.}/streamlit/"
   fi
 fi
 
@@ -18,7 +18,7 @@ fi
 if [ -z "${STREAMLIT_URL}" ] && command -v docker >/dev/null 2>&1; then
   CONTAINER_NAME="transcription_streamlit_${USER}"
   if docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
-    STREAMLIT_URL="http://127.0.0.1:8501"
+    STREAMLIT_URL="http://127.0.0.1:8501/streamlit/"
   fi
 fi
 
